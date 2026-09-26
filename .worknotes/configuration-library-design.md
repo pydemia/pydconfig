@@ -9,5 +9,5 @@
 | [기획 리뷰](reviews/planning-review.md) | 독립 기획 리뷰의 지적, 반영, 재검토 결과 |
 | [설계 리뷰](reviews/design-review.md) | 구조·설정 규칙 리뷰의 지적, 반영, 재검토 결과 |
 | [패키지 이름 변경](package-rename.md) | 배포명·import·저장소·실제 디렉터리 변경과 Codex 경로 전환 완료 |
-| [호환성 기준](compatibility-plan.md) | 최신 Python·Kubernetes, 의존성 baseline, 실행 가능한 기반 probe와 검증 한계 |
+| [호환성 기준](compatibility-plan.md) | Python 3.10–3.14, 의존성 baseline, 실행 가능한 기반 probe와 검증 한계 |
 | [최초 제안 원본](reviews/initial-proposal.md) | 첫 리뷰의 고정 baseline; 이름 변경 전 표기를 포함하며 현재 설계와 다를 수 있음 |

@@ -1,20 +1,102 @@
 # pydconfig
 
-Python 애플리케이션의 이름별 설정, 프로파일, 환경변수 주입을 위한 configuration library를 설계하고 있습니다.
+Python 애플리케이션의 설정을 이름별로 등록하고, YAML·dotenv·환경변수를 타입이 있는 설정 모델로 읽어 주입하기 위한 라이브러리입니다. 기본 구현은 **pydantic, pydantic-settings, python-dotenv**를 사용하도록 설계했습니다.
 
-PyPI 배포명, Python import 이름, 저장소 이름은 모두 `pydconfig`입니다. 기본 환경변수 접두사는 `PYDCONFIG_`, 프로파일 선택 변수는 `PYDCONFIG_PROFILE`로 설계합니다.
+현재 저장소는 **구현 전 단계**입니다. `ConfigLoader`, `ConfigModel`, `ConfigSnapshot`과 build 설정은 아직 없습니다. 아래 API 예제는 설계 계약이며 라이브러리 사용 예제로 실행 검증되지 않았습니다. 현재 실행할 수 있는 코드는 기반 라이브러리 호환성 검사입니다.
 
-기본 구현은 pydantic, pydantic-settings, python-dotenv를 기반으로 합니다.
+배포명, import 이름, 저장소 이름은 `pydconfig`로 통일합니다. `v1.0.0` 배포를 준비 중이며 PyPI 설치 명령은 실제 패키지 배포·설치 검증 후 제공할 예정입니다.
 
-지원 목표는 표준 CPython 3.10–3.14이며 개발 기준은 Python 3.14.7입니다. Kubernetes 호환성 기준은 v1.37.1의 ConfigMap·Secret 환경변수 주입입니다. [지원 버전과 검증 범위](.worknotes/compatibility-plan.md), [실행 가능한 환경 주입 예제](examples/kubernetes/env-injection.yaml)를 함께 제공합니다.
+## 문서
 
-[기획서](.worknotes/product-plan.md)와 [상세 설계서](.worknotes/technical-design.md)에 요구사항, API, 설정 우선순위, 프로파일·dotenv 처리, 주입과 검증 계약을 정리했습니다. [리뷰 기록과 최초 제안](.worknotes/configuration-library-design.md)도 함께 보관합니다.
+| 문서 | 내용 |
+| --- | --- |
+| [사용자 가이드](docs/user-guide.md) | 빠른 시작, 이름별 등록, nested 모델, 프로파일, 보간, snapshot과 override |
+| [설정 규칙](docs/configuration-reference.md) | API 옵션, source 우선순위, boolean·quote, JSON, 타입·파일·오류 계약 |
+| [애플리케이션 연동](docs/integration-guide.md) | 생성자 주입, FastAPI app별 설정, 테스트 격리, 기존 설정 이관 |
+| [개발·검증·배포 가이드](docs/development.md) | 현재 실행 가능한 검사, 검증 범위, 향후 wheel/sdist 설치·release 절차 |
+| [기획서](.worknotes/product-plan.md) · [설계서](.worknotes/technical-design.md) | 요구사항 R1–R14, 구현 구조, release gate G1–G11 |
+| [리뷰 기록](.worknotes/configuration-library-design.md) | 기획·설계 리뷰와 변경 이력 |
 
-현재 구현 전 단계이며 문서의 API는 제안입니다.
+## 설계한 동작
 
-기반 라이브러리의 공개 API와 Kubernetes manifest 스키마는 다음 명령으로 확인할 수 있습니다. 이 검사는 pydconfig 구현의 계약 시험을 대신하지 않습니다.
+- 같은 모델을 `primary_db`, `replica_db`처럼 서로 다른 이름·경로로 등록합니다.
+- 코드 기본값, 기본·프로파일 YAML, 기본·프로파일 dotenv, OS 환경변수, 명시적 override 순으로 값을 적용합니다.
+- `PYDCONFIG_DATABASE__POOL__SIZE`로 `database.pool.size`를 바꿉니다. YAML에 placeholder가 없어도 바인딩합니다.
+- YAML `${DB_HOST}`, `${PORT:-5432}`, `$${LITERAL}`을 지원합니다. dotenv와 OS 문자열은 재보간하지 않습니다.
+- YAML 최상단 `profile` 또는 `PYDCONFIG_PROFILE`로 `.env.local`, `.env.test`, `.env.stg`, `.env.prd`를 선택합니다. 기본 `.env`도 함께 읽습니다.
+- `True/true/TRUE`, `False/false/FALSE`를 같은 boolean으로 읽고, bool·숫자·JSON 환경 입력의 바깥 quote 한 쌍을 처리합니다. 일반 문자열과 비밀값의 quote는 기본 보존합니다.
+- 시작 시 모든 등록 설정을 검증합니다. 조회와 override는 원본 snapshot을 보존하며, 출처 진단은 원문 값을 출력하지 않습니다.
+- 설정 필드는 환경 설정 데이터로 제한합니다. 클라이언트·서비스 인스턴스 등 임의 Python 객체 타입은 지원하지 않습니다.
+
+낮은 우선순위부터 적용합니다.
+
+```text
+코드 기본값 < config.yaml < config.<profile>.yaml
+           < .env < .env.<profile> < OS 환경변수 < 명시적 overrides
+```
+
+프로파일 선택은 별도 순서입니다.
+
+```text
+load(profile=...) > OS PYDCONFIG_PROFILE > .env PYDCONFIG_PROFILE
+                  > config.yaml의 최상단 profile > 선택 없음
+```
+
+## API 미리보기
+
+아래 코드는 구현 목표입니다. 설정 파일이 없는 경로를 지정하며 `environ={}`는 실제 OS 환경을 제외합니다.
+
+```python
+from pydantic import Field
+from pydconfig import ConfigLoader, ConfigModel
+
+
+class PoolConfig(ConfigModel):
+    size: int = Field(default=10, ge=1)
+
+
+class DatabaseConfig(ConfigModel):
+    host: str = "localhost"
+    pool: PoolConfig = Field(default_factory=PoolConfig)
+
+
+loader = ConfigLoader(root_dir="/path/to/empty-config-dir", dotenv=False)
+loader.register("primary_db", DatabaseConfig, path="database.primary")
+snapshot = loader.load(environ={
+    "PYDCONFIG_DATABASE__PRIMARY__HOST": "db.internal",
+    "PYDCONFIG_DATABASE__PRIMARY__POOL__SIZE": '"20"',
+})
+
+database = snapshot.get("primary_db", DatabaseConfig)
+assert database.host == "db.internal"
+assert database.pool.size == 20
+```
+
+`get()`은 등록 **이름**, 환경변수와 `explain()`은 설정 **경로**를 사용합니다. 전체 파일 예제는 [examples/basic](examples/basic/README.md)에 있습니다. 이 예제도 아직 라이브러리 실행 검증 전입니다.
+
+## 현재 실행 가능한 검사
+
+Python 3.10–3.14 중 하나를 사용합니다. 아래 `python3.14`는 설치된 지원 버전의 실행 파일로 바꿀 수 있습니다.
 
 ```bash
-python -m pip install -r requirements/compatibility.txt
-python scripts/check_compatibility.py
+git clone https://github.com/pydemia/pydconfig.git
+cd pydconfig
+python3.14 -m venv .venv
+.venv/bin/python -m pip install -r requirements/compatibility.txt
+.venv/bin/python scripts/check_compatibility.py
 ```
+
+Windows 명령과 검사 항목은 [개발 가이드](docs/development.md#개발-환경)에 있습니다. 의존성 설치에는 네트워크 연결이 필요하며 설치 후 기반 검사는 로컬에서 실행합니다.
+
+## 호환성 검증 상태
+
+지원 목표는 표준 CPython **3.10–3.14**입니다. 개발 기준은 **Python 3.14.7**이며 확인일은 2026-09-26입니다.
+
+| 대상 | 확인한 결과 |
+| --- | --- |
+| Ubuntu Python 3.10·3.11·3.12·3.13·3.14.7 | 이전 commit의 기반 공개 API 검사 통과 |
+| macOS·Windows Python 3.14.7 | 같은 기반 검사 통과 |
+| 이번 변경의 Python 호환성 검사 | CI 재실행 후 결과 기록 예정 |
+| pydconfig 라이브러리·wheel/sdist | 아직 구현·build·설치 검증 전 |
+
+[이전 7개 CI job 실행 결과](https://github.com/pydemia/pydconfig/actions/runs/36237714964)와 [상세 기록](.worknotes/compatibility-plan.md)을 제공합니다. 이 결과는 pydconfig 전체 기능의 지원 판정을 대신하지 않습니다.

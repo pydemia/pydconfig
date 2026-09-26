@@ -1,6 +1,6 @@
 # pydconfig 기획서
 
-상태: Python·Kubernetes 호환성 반영안 v4. 작성일: 2026-09-26. 사용자 지정 기반은 pydantic·pydantic-settings·python-dotenv다. 라이브러리 API는 구현 전 제안이다. 동작 계약과 내부 구조는 [상세 설계서](technical-design.md)에 정의한다. 최초 통합 문서는 [리뷰 기준 원본](reviews/initial-proposal.md)으로 보존했다.
+상태: Python 호환성·문서 범위 반영안 v5. 작성일: 2026-09-26. 사용자 지정 기반은 pydantic·pydantic-settings·python-dotenv다. 라이브러리 API는 구현 전 제안이다. 동작 계약과 내부 구조는 [상세 설계서](technical-design.md)에 정의한다. 최초 통합 문서는 [리뷰 기준 원본](reviews/initial-proposal.md)으로 보존했다.
 
 ## 해결할 문제와 사용 대상
 
@@ -37,7 +37,7 @@ Python 애플리케이션이 이름별 설정을 타입으로 선언하고, 환�
 | R11 | 환경 설정 데이터에 한정한 타입 지원 | `arbitrary_types_allowed=False`를 유지한다. 임의 객체 필드·설정에 주입할 클라이언트 인스턴스·이를 허용하는 subclass는 등록에서 거부한다. |
 | R12 | boolean 대소문자 처리 | `True/False`, `true/false`, `TRUE/FALSE`, 혼합 대소문자를 같은 boolean으로 읽는다. 실제 quote가 남은 환경 입력도 명시된 정규화 규칙으로 처리하며 알 수 없는 token은 오류다. |
 | R13 | 환경 입력의 quote 처리 | bool·숫자·복합 JSON은 짝이 맞는 바깥 quote 한 겹을 제거한다. 문자열은 기본 보존하고 필드별 `env_quote_policy`로 제거를 선택한다. 내부 quote·escape·replay 입력을 반복 변환하지 않는다. |
-| R14 | 최신 안정 Python·Kubernetes와 호환 | CPython 3.10–3.14를 대상으로 Python 3.14.7과 Kubernetes v1.37.1을 기준으로 검증한다. ConfigMap·Secret 주입값의 문자열·quote·source 우선순위가 문서와 일치한다. 기반 probe와 실제 pydconfig 계약 시험 결과를 구분한다. |
+| R14 | Python 3.10–3.14와 호환 | 표준 CPython 3.10–3.14를 대상으로 개발 기준 Python 3.14.7과 기반 의존성의 공개 API·파서 동작을 검증한다. 기반 probe와 실제 pydconfig 계약·배포 패키지 시험 결과를 구분한다. |
 
 ## MVP 범위와 확장 순서
 

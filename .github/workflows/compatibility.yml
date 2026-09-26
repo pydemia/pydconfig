@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  upstream-and-manifest:
+  upstream-settings:
     name: Python ${{ matrix.python }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -31,5 +31,5 @@ jobs:
           cache-dependency-path: requirements/compatibility.txt
       - name: Install the compatibility baseline
         run: python -m pip install -r requirements/compatibility.txt
-      - name: Check upstream APIs and Kubernetes 1.37.1 schema
-        run: python scripts/check_compatibility.py --kubernetes-version 1.37.1
+      - name: Check upstream settings APIs
+        run: python scripts/check_compatibility.py

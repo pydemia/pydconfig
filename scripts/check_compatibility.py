@@ -1,4 +1,4 @@
-"""Check upstream APIs and Kubernetes manifests before pydconfig is implemented."""
+"""Check upstream settings APIs before pydconfig is implemented."""
 
 from __future__ import annotations
 
@@ -9,24 +9,14 @@ from io import StringIO
 import json
 import logging
 import os
-from pathlib import Path
-import re
 import sys
 from typing import Any
 from unittest.mock import patch
-from urllib.request import urlopen
 
 from dotenv import dotenv_values
-from jsonschema import Draft4Validator
 from pydantic import BaseModel, ConfigDict, SecretStr, TypeAdapter, ValidationError
 from pydantic import create_model, field_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
-from referencing import Registry, Resource
-from referencing.jsonschema import DRAFT4
-import yaml
-
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 class RedactedInput(dict):
@@ -140,59 +130,17 @@ def check_environment_parsing() -> None:
     assert dict(os.environ) == before
 
 
-def check_kubernetes_manifest(kubernetes_version: str) -> int:
-    if not re.fullmatch(r"\d+\.\d+\.\d+", kubernetes_version):
-        raise ValueError("Expected a stable Kubernetes x.y.z version")
-    url = (
-        "https://raw.githubusercontent.com/kubernetes/kubernetes/"
-        f"v{kubernetes_version}/api/openapi-spec/swagger.json"
-    )
-    with urlopen(url, timeout=30) as response:
-        schema = json.load(response)
-    uri = f"urn:pydconfig:kubernetes:{kubernetes_version}"
-    registry = Registry().with_resource(
-        uri, Resource.from_contents(schema, default_specification=DRAFT4)
-    )
-    definitions = {
-        ("v1", "Namespace"): "io.k8s.api.core.v1.Namespace",
-        ("v1", "ConfigMap"): "io.k8s.api.core.v1.ConfigMap",
-        ("v1", "Secret"): "io.k8s.api.core.v1.Secret",
-        ("batch/v1", "Job"): "io.k8s.api.batch.v1.Job",
-    }
-    manifest = ROOT / "examples/kubernetes/env-injection.yaml"
-    resources = list(yaml.safe_load_all(manifest.read_text()))
-    for obj in resources:
-        definition = definitions[(obj["apiVersion"], obj["kind"])]
-        validator = Draft4Validator(
-            {"$ref": f"{uri}#/definitions/{definition}"}, registry=registry
-        )
-        validator.validate(obj)
-        if obj["kind"] in ("ConfigMap", "Secret"):
-            values = obj.get("data", obj.get("stringData", {}))
-            assert all(isinstance(value, str) for value in values.values())
-        if obj["kind"] == "Job":
-            container = obj["spec"]["template"]["spec"]["containers"][0]
-            assert container["image"] == "python:3.14.7-slim"
-            assert container["env"][0]["value"] == '"False"'
-            compile(container["args"][0], str(manifest), "exec")
-    return len(resources)
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--kubernetes-version", default="1.37.1")
-    args = parser.parse_args()
+    parser.parse_args()
     if sys.version_info < (3, 10):
         parser.error("The compatibility baseline requires Python 3.10 or newer")
     check_settings_api()
     check_environment_parsing()
-    count = check_kubernetes_manifest(args.kubernetes_version)
     print(json.dumps({
-        "scope": "upstream APIs and manifest schema; not pydconfig runtime",
+        "scope": "upstream settings APIs; not pydconfig runtime",
         "python": sys.version.split()[0],
         "dependencies": {name: version(name) for name in ("pydantic", "pydantic-settings", "python-dotenv", "PyYAML")},
-        "kubernetes_schema": args.kubernetes_version,
-        "resources_validated": count,
         "result": "passed",
     }))
 
