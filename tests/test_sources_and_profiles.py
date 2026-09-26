@@ -237,6 +237,7 @@ def test_root_frozen_at_construction(tmp_path, monkeypatch):
         (".env", b"x" * (1024 * 1024 + 1)),
         ("config.yaml", b"\xff\xfe"),
     ],
+    ids=["oversized-yaml", "oversized-dotenv", "invalid-utf8"],
 )
 def test_file_limits_encoding(loader, tmp_path, filename, content):
     (tmp_path / filename).write_bytes(content)
