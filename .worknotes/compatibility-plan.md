@@ -50,3 +50,7 @@ python scripts/check_compatibility.py
 - Python 설정 API만 대상으로 정리한 code commit `0370734a007cf16a711a20f91474dd07945fea92`의 [CI](https://github.com/pydemia/pydconfig/actions/runs/36239341897)가 completed/success다.
 - Ubuntu의 Python 3.10·3.11·3.12·3.13·3.14.7, macOS·Windows 3.14.7의 7개 job을 각각 completed/success로 확인했다.
 - 이 결과는 기반 API 호환성 판정이다. ConfigLoader 구현·smart quote·전체 G1–G11·wheel 설치는 아직 검증되지 않았다.
+
+## v1.0.0 구현 검증
+
+위 기록은 probe-only 준비 단계의 결과다. 실제 src/pydconfig 구현과 pytest 계약 시험, mypy, sdist→wheel build·설치·예제 검증을 추가했다. 동일한 7개 Python/OS 조합의 새 CI 결과는 [release 기록](release-plan.md)에 귀속한다. 지원 범위 밖 Python 구현·버전은 이 결과로 보장하지 않는다.

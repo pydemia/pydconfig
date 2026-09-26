@@ -1,6 +1,6 @@
 # pydconfig 상세 설계서
 
-상태: 구현 전 설계 v5. 사용자 지정 필수 기반은 pydantic·pydantic-settings·python-dotenv다. 기준 요구사항은 [기획서 R1–R14](product-plan.md#요구사항과-인수-기준)다. 아래 signature와 자료구조는 공개·내부 API의 목표 계약이며 실행 가능한 라이브러리가 아직 있는 것은 아니다.
+상태: v1.0.0 구현 반영 설계 v6. 사용자 지정 필수 기반은 pydantic·pydantic-settings·python-dotenv다. 기준 요구사항은 [기획서 R1–R14](product-plan.md#요구사항과-인수-기준)다. 공개 계약은 src/pydconfig에 구현했다. 아래 내부 객체 이름은 설계상의 역할명이며 구현 대응표와 검증 결과는 문서 끝에 기록한다.
 
 ## 설계 결정
 
@@ -399,3 +399,15 @@ examples/basic/
 G1–G8·G10은 prototype/MVP의 구현 gate다. 현 문서 리뷰 단계에서는 로컬 pydantic 2.13.0 / pydantic-settings 2.13.1에서 create_model·BaseSettings·custom source 구성과 disposable 입력 복사로 value=2→output=4의 독립 replay를 확인했다. python-dotenv 설치 버전은 1.2.1이다. v3 추가 요구에서는 Pydantic 단독이 boolean 대소문자 variant를 허용하고 actual quote·바깥 공백을 포함한 bool 문자는 거부하는 동작, python-dotenv가 파일 문법 quote는 제거하고 안쪽 실제 quote는 남기는 동작을 확인했다. 전체 라이브러리 구현이나 이 표의 전체 시험을 실행한 것은 아니다. 최신 공식 문서/source의 debug 기능은 로컬 설치 버전과 차이가 있어 release gate에서 별도로 확인한다. 사전 검증 adapter, 최소 의존성 버전, 라이선스·배포명 확정은 구현 단계에서 기록한다.
 
 위 실험은 v2/v3 당시 관찰이다. 최신 의존성·Python 검증 상태와 CI 범위는 [호환성 기록](compatibility-plan.md)에 따로 기록한다. v3 문서 리뷰의 승인이 후속 추가 계약 또는 전체 G11의 통과를 뜻하지 않는다.
+
+## v1.0.0 구현 대응과 adapter 결정
+
+구현의 `Plan`, `Node`, `Catalog`, `Resolution`은 위 역할명 FieldPlan, InputNode, DefaultCatalog, ResolvedInput에 각각 대응한다. public 객체와 exception은 src/pydconfig/__init__.py에서 export한다. `FieldExplanation`·`SourceReport`·`ConfigIssue`는 frozen dataclass이며 값 필드를 갖지 않는다.
+
+YAML은 전용 SafeLoader resolver와 token/node 검사로 제한된 subset을 읽는다. 전역 PyYAML loader를 수정하지 않는다. dotenv의 실제 값 decoding은 공개 `dotenv_values(interpolate=False)`를 사용한다. duplicate·문법 오류·값 없는 KEY 검사는 python-dotenv의 `parser.parse_stream` binding 정보를 보완적으로 사용한다. 이 parser 모듈은 공개 최상위 API보다 변경 위험이 있으므로 python-dotenv 범위를 `>=1.2.3,<2`로 제한하고 모든 CI 조합에서 실제 dotenv 계약을 실행한다.
+
+최소 기반은 pydantic 2.13.5, pydantic-settings 2.15.0, python-dotenv 1.2.3, PyYAML 6.0.3이다. Settings의 public 확장 지점과 FieldInfo.default_factory_takes_validated_data를 사용한다. 미지원 스키마·임의 타입 정책 완화는 등록 단계에서 거부한다. 여러 host의 공개 PostgresDsn 등 DSN 타입도 지원한다.
+
+입력 한도는 source별 검사와 별개로 전체 병합 tree·replay·보간으로 생성된 JSON에도 적용한다. env 후보 예산은 기본 dotenv·profile dotenv·OS의 UTF-8 key/value를 누적한다. YAML 문자열 보간은 추가 문자열을 합치기 전에 출력 길이를 제한한다. whole-model placeholder의 참조 source는 해석된 하위 leaf에도 전파한다.
+
+tests의 schema/default, sources/profiles, binding/quoting, snapshot/diagnostics와 review regression 시험이 G1–G8·G10을 구현한다. G9·G11의 설치·플랫폼 결과와 실제 배포 상태는 [release 기록](release-plan.md)을 따른다. 과거 문서 리뷰 승인과 이번 구현 검증은 별도 증거다.

@@ -1,6 +1,6 @@
 # pydconfig 기획서
 
-상태: Python 호환성·문서 범위 반영안 v5. 작성일: 2026-09-26. 사용자 지정 기반은 pydantic·pydantic-settings·python-dotenv다. 라이브러리 API는 구현 전 제안이다. 동작 계약과 내부 구조는 [상세 설계서](technical-design.md)에 정의한다. 최초 통합 문서는 [리뷰 기준 원본](reviews/initial-proposal.md)으로 보존했다.
+상태: v1.0.0 구현 반영안 v6. 작성일: 2026-09-26. 사용자 지정 기반은 pydantic·pydantic-settings·python-dotenv다. 라이브러리 API는 src/pydconfig에 구현했다. 검증·배포 증거는 release-plan.md에 기록한다. 동작 계약과 내부 구조는 [상세 설계서](technical-design.md)에 정의한다. 최초 통합 문서는 [리뷰 기준 원본](reviews/initial-proposal.md)으로 보존했다.
 
 ## 해결할 문제와 사용 대상
 
@@ -18,7 +18,7 @@ Python 애플리케이션이 이름별 설정을 타입으로 선언하고, 환�
 | 구현 패키지 경로 | `src/pydconfig/` |
 | 기본 환경변수 / 프로파일 변수 | `PYDCONFIG_` / `PYDCONFIG_PROFILE` |
 
-개인 계정명은 패키지명에 포함하지 않는다. 위 패키지 경로는 구현 시 적용하며 아직 구현 파일이나 배포 가능한 패키지는 없다. 최초 리뷰 원본의 이전 이름은 당시 검토 근거로 보존한다.
+개인 계정명은 패키지명에 포함하지 않는다. 패키지 구현 경로는 src/pydconfig이며 wheel·sdist metadata의 배포명도 pydconfig다. 최초 리뷰 원본의 이전 이름은 당시 검토 근거로 보존한다.
 
 ## 요구사항과 인수 기준
 

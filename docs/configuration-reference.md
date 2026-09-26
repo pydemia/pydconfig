@@ -1,6 +1,6 @@
 # 설정 규칙
 
-구현 전 API 계약이다. [상세 설계 v5](../.worknotes/technical-design.md)를 사용 관점에서 정리했으며, 구현·wheel 검증 후 release별 API reference로 확정한다. 코드 예제의 기반 모델 선언은 [사용자 가이드](user-guide.md)에 있다.
+pydconfig 1.0.0의 공개 API와 입력 처리 규칙이다. 코드 예제의 기반 모델 선언은 [사용자 가이드](user-guide.md)에 있다.
 
 ## ConfigLoader 옵션
 
@@ -46,7 +46,7 @@ ConfigLoader(
 
 `environ=None`은 실제 OS 환경 복사본, `{}`는 빈 환경이다. `profile=None`은 외부 후보를 계속 검사한다는 뜻이며 자동 profile을 강제로 끄는 sentinel은 없다. `overrides`는 YAML root와 같은 mapping 구조이며 profile을 변경하지 않는다.
 
-같은 loader에서 등록을 끝낸 후 독립 load를 동시에 수행할 수 있도록 설계한다. register와 load를 동시에 호출하는 사용은 지원하지 않는다. 기존 snapshot은 나중의 register 영향을 받지 않는다.
+같은 loader에서 등록을 끝낸 후 독립 load를 동시에 수행할 수 있다. register와 load를 동시에 호출하는 사용은 지원하지 않는다. 기존 snapshot은 나중의 register 영향을 받지 않는다.
 
 ## Source 우선순위와 병합
 
@@ -169,13 +169,14 @@ JSON은 duplicate key와 NaN/Infinity를 거부한다. 복합 타입의 최상�
 | 입력 | 기본 한도 |
 | --- | --- |
 | YAML·dotenv 파일 | 각 1 MiB |
-| YAML node | 10,000개 |
+| YAML node·병합된 입력 node | 각각 10,000개 |
 | 입력 tree·JSON depth | 32 |
-| env 설정 후보 전체 크기 | 1 MiB |
+| 기본·profile dotenv와 OS의 바인딩 후보 누적 크기 | key와 값의 UTF-8 합계 1 MiB |
+| YAML 보간 결과 | 문자열마다 UTF-8 1 MiB |
 | JSON 문자열 | 64 KiB |
 | profile·경로 후보 길이 | 128자 |
 
-override에도 입력 node·depth 한도를 적용한다. 이 한도는 초기 설계값이며 처리 속도·성능 측정 결과가 아니다.
+override와 replay에도 입력 node·depth 한도를 적용한다. 보간으로 생성한 JSON과 전체 병합 결과도 검사한다. 처리 속도나 성능 수치를 보장하는 한도는 아니다.
 
 ## 오류와 진단
 
@@ -191,5 +192,14 @@ override에도 입력 node·depth 한도를 적용한다. 이 한도는 초기 �
 오류에는 path·source·정규화한 reason code와 가능한 위치 정보만 담는다. parser 원문 snippet, validator message와 input·ctx, 원본 exception chain은 노출하지 않는다. 임의 사용자 callback의 message를 그대로 출력하지 않는다.
 
 출처 진단의 `defined_at`, `references`, `shadowed`는 검증 입력을 설명한다. null 장벽·schema fallback을 구분하며 출력은 `opaque-validation`으로 표시한다. custom serializer·computed property를 진단을 위해 실행하지 않는다. source report의 파일 상태는 `loaded`, `skipped-missing`, `disabled`로 구분한다.
+
+진단 객체는 immutable dataclass다. `SourceRef(kind, name, line, column)`에서 name은 파일 경로·환경변수명·기본값 경로이며 line과 column은 확보된 경우 1부터 시작한다. `FieldExplanation`은 `path`, `defined_at`, `references`, `shadowed`, `steps`, `output`을 제공한다. `SourceReport`는 `sources`, `ignored_paths`, `noncanonical_variables`를 제공한다. `ConfigError.issues`는 `ConfigIssue(code, path, source, expected)`의 tuple이다. 위치와 식별자는 메타데이터이며 설정 원문 값은 포함하지 않는다.
+
+```python
+from dataclasses import asdict
+
+diagnostic = asdict(snapshot.explain("database.pool.size"))
+assert diagnostic["output"] == "opaque-validation"
+```
 
 값 출력 dump API는 제공하지 않는다. 애플리케이션이 get으로 받은 값을 직접 출력하는 행동까지 차단하지 않는다. Settings debug 활성 상태의 비밀값 유출 여부는 의존성별 release gate에서 검증한다.

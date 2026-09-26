@@ -1,4 +1,4 @@
-name: Upstream compatibility
+name: Package compatibility
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  upstream-settings:
+  package:
     name: Python ${{ matrix.python }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -28,8 +28,26 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: pip
-          cache-dependency-path: requirements/compatibility.txt
+          cache-dependency-path: |
+            requirements/compatibility.txt
+            pyproject.toml
       - name: Install the compatibility baseline
-        run: python -m pip install -r requirements/compatibility.txt
+        run: python -m pip install -r requirements/compatibility.txt build
+      - name: Build wheel from sdist
+        run: python -m build
+      - name: Install the built package and verification tools
+        run: python -m pip install "dist/pydconfig-1.0.0-py3-none-any.whl[dev]"
+      - name: Check package metadata
+        run: python -m twine check dist/*
+      - name: Check dependencies
+        run: python -m pip check
       - name: Check upstream settings APIs
         run: python scripts/check_compatibility.py
+      - name: Run contracts against the installed wheel
+        run: python -m pytest -q
+      - name: Check installed package and file example
+        run: python scripts/check_distribution.py
+      - name: Type check public implementation
+        run: python -m mypy
+      - name: Check formatting and imports
+        run: python -m ruff check src tests scripts examples/basic/app.py

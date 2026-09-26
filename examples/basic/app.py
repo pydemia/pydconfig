@@ -1,4 +1,4 @@
-"""Proposed API example; run after the pydconfig implementation is released."""
+"""Load the bundled YAML and dotenv templates with pydconfig 1.0.0."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from pydantic import Field
+
 from pydconfig import ConfigLoader, ConfigModel
 
 
@@ -32,15 +33,19 @@ def main() -> None:
     snapshot = loader.load(environ={})
     database = snapshot.get("database", DatabaseConfig)
     feature = snapshot.get("feature", FeatureConfig)
-    print(json.dumps({
-        "profile": snapshot.profile,
-        "database_host": database.host,
-        "database_port": database.port,
-        "pool_size": database.pool.size,
-        "pool_timeout": database.pool.timeout,
-        "feature_enabled": feature.enabled,
-        "feature_hosts": feature.hosts,
-    }))
+    print(
+        json.dumps(
+            {
+                "profile": snapshot.profile,
+                "database_host": database.host,
+                "database_port": database.port,
+                "pool_size": database.pool.size,
+                "pool_timeout": database.pool.timeout,
+                "feature_enabled": feature.enabled,
+                "feature_hosts": feature.hosts,
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

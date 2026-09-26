@@ -8,14 +8,11 @@
 
 최초 리뷰 원본은 수정하지 않았다. 이전 검증 기록은 당시 commit·CI에 귀속시키며 새 변경의 검증으로 재사용하지 않는다.
 
-## 배포 범위 확인
+## 확정한 배포 범위
 
-현재 실제 ConfigLoader·ConfigModel·ConfigSnapshot 구현과 build metadata가 없다. wheel에 담을 기능이 정해져야 build·설치 검증·tag를 완료할 수 있다. 사용자에게 아래 선택을 요청한 상태다.
+사용자가 “설계한 설정 라이브러리를 구현·검증한 뒤 release”를 선택했다. 문서·probe만 패키징하는 선택은 진행하지 않는다. ConfigLoader·ConfigModel·ConfigSnapshot과 계약 시험, wheel·sdist를 구현해 v1.0.0으로 배포한다. release branch·tag·GitHub Release에도 반영하며 PyPI 인증이나 업로드가 동작하지 않으면 사용자가 수동 업로드한다.
 
-- 설계한 설정 라이브러리를 구현·검증한 뒤 release
-- 현재 문서·호환성 검사만 패키징해 release
-
-이 선택의 응답 전에는 라이브러리 구현 완료 또는 v1.0.0 배포 완료로 기록하지 않는다. GitHub Release·wheel은 아직 없다.
+아래 과거 문서·probe 기록은 당시 commit의 결과다. 이번 구현의 검증은 별도 단락에서 기록한다.
 
 ## 문서와 branch 준비
 
@@ -34,3 +31,7 @@
 - [CI 실행 36239341897](https://github.com/pydemia/pydconfig/actions/runs/36239341897)의 7개 job이 모두 completed/success다. Ubuntu Python 3.10–3.14와 macOS·Windows 3.14.7에서 기반 API를 확인했다.
 
 검증 결과 기록은 문서만 변경하며 code 검증 commit과 구분한다. main은 release의 문서·probe 변경을 fast-forward로 반영한다. 태그·GitHub Release는 범위 확정과 배포물 검증 뒤 진행한다.
+
+## v1.0.0 구현 검증 진행
+
+src/pydconfig와 build metadata, 계약 시험을 작성했다. macOS CPython 3.14.4에서 172개 시험이 통과했고 타입·배포물·플랫폼 검증은 진행 중이다. CI는 설치한 wheel에 전체 계약 시험을 실행하도록 변경한다. 태그와 GitHub Release는 이 검증이 통과한 commit을 가리키게 한다. 완료 결과와 PyPI 상태는 검증 후 기록한다.

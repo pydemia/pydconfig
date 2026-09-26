@@ -1,21 +1,28 @@
-"""Check upstream settings APIs before pydconfig is implemented."""
+"""Check the upstream settings APIs independently of pydconfig's contract suite."""
 
 from __future__ import annotations
 
 import argparse
-from copy import deepcopy
-from importlib.metadata import version
-from io import StringIO
 import json
 import logging
 import os
 import sys
+from copy import deepcopy
+from importlib.metadata import version
+from io import StringIO
 from typing import Any
 from unittest.mock import patch
 
 from dotenv import dotenv_values
-from pydantic import BaseModel, ConfigDict, SecretStr, TypeAdapter, ValidationError
-from pydantic import create_model, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    SecretStr,
+    TypeAdapter,
+    ValidationError,
+    create_model,
+    field_validator,
+)
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 

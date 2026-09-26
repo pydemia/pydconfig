@@ -1,6 +1,6 @@
 # 기본 파일 예제
 
-`app.py`는 아직 구현되지 않은 `pydconfig` 공개 API의 예제다. 현재는 syntax 검사만 가능하며 라이브러리 wheel 설치 후 실행·출력 검증을 수행할 예정이다. 설치된 버전과 예제 검증 결과가 명시되기 전에는 실행 가능한 quickstart로 취급하지 않는다.
+`app.py`는 pydconfig 1.0.0의 YAML·profile·dotenv·boolean 처리 예제다. [README 설치 명령](../../README.md#설치)으로 wheel을 설치한 뒤 저장소 root에서 실행한다. CI는 이 예제를 임시 디렉터리에 복사해 실행하고 출력값을 검사한다.
 
 구성 파일은 공개 예제 값만 사용한다. `.env.example`과 `.env.local.example`은 복사하기 전에는 loader가 읽지 않는다.
 
@@ -18,7 +18,7 @@ Copy-Item examples/basic/.env.local.example examples/basic/.env.local
 python examples/basic/app.py
 ```
 
-예제는 root_dir을 파일 위치에 고정하고 `load(environ={})`로 사용자 OS 환경을 제외한다. 설계 계약에 따른 기대 출력은 다음과 같다.
+예제는 root_dir을 파일 위치에 고정하고 `load(environ={})`로 사용자 OS 환경을 제외한다. 출력은 다음과 같다.
 
 ```json
 {"profile": "local", "database_host": "local-db.internal", "database_port": 5432, "pool_size": 32, "pool_timeout": 2.5, "feature_enabled": false, "feature_hosts": ["primary", "replica"]}

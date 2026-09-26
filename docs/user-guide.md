@@ -1,6 +1,6 @@
 # 사용자 가이드
 
-이 문서는 [상세 설계 v5](../.worknotes/technical-design.md)에 따른 사용 계약을 설명한다. 현재 `pydconfig` 라이브러리는 구현 전이며, 이 문서의 import와 API 예제는 실행 검증 전이다. 지금 실행 가능한 검사는 [개발 가이드](development.md)에 있다. 설치된 wheel에서 예제를 검증한 뒤 사용 가능한 release와 설치 명령을 명시한다.
+pydconfig 1.0.0의 사용법이다. 설치는 [README](../README.md#설치), 개발·시험 방법은 [개발 가이드](development.md)를 따른다. 전체 파일 예제는 설치된 wheel에서 실행하고 출력까지 검사한다.
 
 ## 빠른 시작
 
@@ -83,7 +83,7 @@ PYDCONFIG_DATABASE__POOL__SIZE=32
 PYDCONFIG_FEATURE__ENABLED='"False"'
 ```
 
-OS에 같은 이름의 변수가 없으면 결과는 다음 계약을 따른다.
+OS에 같은 이름의 변수가 없으면 다음 값이 나온다.
 
 | 필드 | 결과 | 적용 source |
 | --- | --- | --- |
@@ -190,6 +190,8 @@ loader = ConfigLoader(
     root_dir="/path/to/config",
     allowed_profiles=["local", "test", "stg", "prd"],
 )
+loader.register("database", DatabaseConfig)
+loader.register("feature", FeatureConfig)
 snapshot = loader.load(profile="test")
 assert snapshot.profile == "test"
 ```
@@ -274,7 +276,7 @@ explanation = snapshot.explain("database.pool.size")
 report = snapshot.source_report()
 ```
 
-`explain()`은 값 없이 입력을 정의한 source, placeholder 참조 source, 가려진 source, null 장벽과 schema 기본값 fallback을 설명한다. 임의 validator가 만든 최종 출력의 데이터 의존관계까지 추적하지 않는다. `source_report()`는 읽음·부재로 생략·비활성 파일과 무시한 경로 등을 보고한다. 두 반환 객체의 구체적인 serialization 형식은 구현 후 API reference에 확정한다.
+`explain()`은 값 없이 입력을 정의한 source, placeholder 참조 source, 가려진 source, null 장벽과 schema 기본값 fallback을 설명한다. 임의 validator가 만든 최종 출력의 데이터 의존관계까지 추적하지 않는다. `source_report()`는 읽음·부재로 생략·비활성 파일과 무시한 경로 등을 보고한다. 두 반환 객체는 frozen dataclass이며 `dataclasses.asdict()`로 값 없는 진단 mapping을 만들 수 있다. [진단 객체 reference](configuration-reference.md#오류와-진단)
 
 | 문제 | 확인할 사항 |
 | --- | --- |
