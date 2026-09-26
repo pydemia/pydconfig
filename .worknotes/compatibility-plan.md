@@ -57,6 +57,6 @@ kubectl --context kind-pydconfig-compat -n pydconfig-compat logs job/pydconfig-e
 - macOS arm64 / CPython 3.14.4에서 고정 최신 의존성 설치와 기반 probe·v1.37.1 schema 검증을 통과했다. 현재 시스템 Python을 교체하지 않고 임시 venv를 사용했다.
 - macOS arm64 / CPython 3.13.13에서도 같은 기반 probe·schema 검증을 통과했다.
 - Linux arm64 / 공식 Python 3.10.21-slim과 3.14.7-slim 컨테이너에서 고정 의존성 설치와 같은 기반 probe·v1.37.1 schema 검증을 통과했다.
-- CI에는 Ubuntu CPython 3.10·3.11·3.12·3.13·3.14.7과 macOS·Windows 3.14.7 job을 추가했다. 원격 실행 결과는 별도로 확인한다.
+- CI의 Ubuntu CPython 3.10·3.11·3.12·3.13·3.14.7과 macOS·Windows 3.14.7, 총 7개 job이 모두 통과했다. 검증 대상은 code commit `bd23d4b03d70acd9375cd4814c7fee446925b53f`이며 [실행 결과](https://github.com/pydemia/pydconfig/actions/runs/36237714964)는 completed/success로 확인했다.
 - 실제 Kubernetes 클러스터의 환경 주입 Job은 아직 실행하지 않았다. 공식 schema와 manifest 안의 Python 코드 검증까지 수행했다.
 - 전체 pydconfig 구현·wheel/sdist·G1–G11과 실제 클러스터에서의 라이브러리 검증은 아직 수행할 구현 단계 작업이다. 최초 리뷰 원본과 v2/v3의 승인 기록은 그대로 보존한다.
