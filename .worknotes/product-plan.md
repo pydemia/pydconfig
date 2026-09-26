@@ -1,6 +1,6 @@
 # pydconfig 기획서
 
-상태: 사용자 추가 요구 반영안 v3. 작성일: 2026-09-26. 사용자 지정 기반은 pydantic·pydantic-settings·python-dotenv다. 라이브러리 API는 구현 전 제안이다. 동작 계약과 내부 구조는 [상세 설계서](technical-design.md)에 정의한다. 최초 통합 문서는 [리뷰 기준 원본](reviews/initial-proposal.md)으로 보존했다.
+상태: Python·Kubernetes 호환성 반영안 v4. 작성일: 2026-09-26. 사용자 지정 기반은 pydantic·pydantic-settings·python-dotenv다. 라이브러리 API는 구현 전 제안이다. 동작 계약과 내부 구조는 [상세 설계서](technical-design.md)에 정의한다. 최초 통합 문서는 [리뷰 기준 원본](reviews/initial-proposal.md)으로 보존했다.
 
 ## 해결할 문제와 사용 대상
 
@@ -37,17 +37,18 @@ Python 애플리케이션이 이름별 설정을 타입으로 선언하고, 환�
 | R11 | 환경 설정 데이터에 한정한 타입 지원 | `arbitrary_types_allowed=False`를 유지한다. 임의 객체 필드·설정에 주입할 클라이언트 인스턴스·이를 허용하는 subclass는 등록에서 거부한다. |
 | R12 | boolean 대소문자 처리 | `True/False`, `true/false`, `TRUE/FALSE`, 혼합 대소문자를 같은 boolean으로 읽는다. 실제 quote가 남은 환경 입력도 명시된 정규화 규칙으로 처리하며 알 수 없는 token은 오류다. |
 | R13 | 환경 입력의 quote 처리 | bool·숫자·복합 JSON은 짝이 맞는 바깥 quote 한 겹을 제거한다. 문자열은 기본 보존하고 필드별 `env_quote_policy`로 제거를 선택한다. 내부 quote·escape·replay 입력을 반복 변환하지 않는다. |
+| R14 | 최신 안정 Python·Kubernetes와 호환 | CPython 3.10–3.14를 대상으로 Python 3.14.7과 Kubernetes v1.37.1을 기준으로 검증한다. ConfigMap·Secret 주입값의 문자열·quote·source 우선순위가 문서와 일치한다. 기반 probe와 실제 pydconfig 계약 시험 결과를 구분한다. |
 
 ## MVP 범위와 확장 순서
 
 MVP는 `ConfigLoader`, `ConfigModel`, `ConfigSnapshot`의 세 API를 중심으로 한다. 이름 등록, 단일 profile, 기본·profile YAML, dotenv 누적 로딩, nested env 바인딩, YAML 보간, 타입 검증, 독립 snapshot, 값 없는 출처 진단을 지원하며 R10의 기반 라이브러리를 사용한다. 환경 입력의 boolean과 quote 처리는 R12·R13에 따른다.
 
-필수 기반은 **pydantic v2, pydantic-settings v2, python-dotenv**다. pydantic은 모델·타입 검증, pydantic-settings는 BaseSettings와 사용자 정의 설정 소스 실행, python-dotenv는 dotenv 파일 파싱을 담당한다. name registry·profile bootstrap·provenance는 이 기반 위에서 구현한다. 세부 schema 지원 범위는 설계서에 고정한다. Python 3.11 이상을 목표로 개발하며 출시 시점에 지원 상태인 Python minor 버전과 의존성 조합을 CI에서 검증한다. 미지원 타입은 register 시 거부한다.
+필수 기반은 **pydantic v2, pydantic-settings v2, python-dotenv**다. pydantic은 모델·타입 검증, pydantic-settings는 BaseSettings와 사용자 정의 설정 소스 실행, python-dotenv는 dotenv 파일 파싱을 담당한다. name registry·profile bootstrap·provenance는 이 기반 위에서 구현한다. 세부 schema 지원 범위는 설계서에 고정한다. 표준 CPython 3.10–3.14를 지원 목표로 두고 개발 기준은 최신 안정 Python 3.14.7로 고정한다. Python 3.15 pre-release와 free-threaded/PyPy 지원은 이번 검증 범위에 포함하지 않는다. 미지원 타입은 register 시 거부한다. 버전 확인 근거와 실행 범위는 [호환성 기준](compatibility-plan.md)에 기록한다.
 
 | 시점 | 범위 | 완료 기준 |
 | --- | --- | --- |
 | 계약 prototype | BaseSettings custom source, source 충돌, nested default, 보간, snapshot 재검증 | 필수 세 라이브러리의 공개 확장 API로 계약을 구현할 수 있음을 확인한다. 불가능한 계약은 문서를 먼저 변경한다. |
-| MVP | R1–R13, 문서·최소 예제·배포 패키지 | 설계서의 계약 시험 통과, clean install 후 예제 실행, import 부작용 없음 |
+| MVP | R1–R14, 문서·최소 예제·배포 패키지 | 설계서의 계약 시험 통과, clean install 후 예제 실행, import 부작용 없음 |
 | 첫 서비스 적용 | template-backend의 작은 설정 영역 | 비민감 fixture로 기존 동작과 차이를 비교하고 이관·복구 절차를 확인한다. |
 | 사용성 확장 | FastAPI adapter, alias, explicit multi-YAML, schema export | 필요한 호환 입력과 adapter의 앱별 격리를 검증한다. |
 | 운영 확장 | 명시적 secret directory, custom sources, 검증 CLI | 추가 source의 순서·실패 정책을 공개하고 기존 기본 순서를 유지한다. |
@@ -141,6 +142,6 @@ profile 선택은 `load(profile=...) > OS PYDCONFIG_PROFILE > 기본 .env의 PYD
 
 ## 완료와 검토의 의미
 
-문서 리뷰 완료는 구현·호환성 검증 완료와 구분한다. MVP 완료는 R1–R13에 연결된 계약 시험, 플랫폼별 경로·환경 처리, wheel/sdist 설치, 타입 검사, 예제 실행 결과로 판단한다. 성능 수치는 측정 후 기록하며 현재 기획 단계에서 목표 처리시간을 임의로 약속하지 않는다.
+문서 리뷰 완료는 구현·호환성 검증 완료와 구분한다. MVP 완료는 R1–R14에 연결된 계약 시험, 플랫폼별 경로·환경 처리, wheel/sdist 설치, 타입 검사, 예제 실행 결과로 판단한다. 성능 수치는 측정 후 기록하며 현재 기획 단계에서 목표 처리시간을 임의로 약속하지 않는다.
 
 리뷰의 지적·반영·재검토 결과는 [기획 리뷰](reviews/planning-review.md)와 [설계 리뷰](reviews/design-review.md)에 기록한다.

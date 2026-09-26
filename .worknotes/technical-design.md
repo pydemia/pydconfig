@@ -1,6 +1,6 @@
 # pydconfig 상세 설계서
 
-상태: 구현 전 설계 v3. 사용자 지정 필수 기반은 pydantic·pydantic-settings·python-dotenv다. 기준 요구사항은 [기획서 R1–R13](product-plan.md#요구사항과-인수-기준)다. 아래 signature와 자료구조는 공개·내부 API의 목표 계약이며 실행 가능한 라이브러리가 아직 있는 것은 아니다.
+상태: 구현 전 설계 v4. 사용자 지정 필수 기반은 pydantic·pydantic-settings·python-dotenv다. 기준 요구사항은 [기획서 R1–R14](product-plan.md#요구사항과-인수-기준)다. 아래 signature와 자료구조는 공개·내부 API의 목표 계약이며 실행 가능한 라이브러리가 아직 있는 것은 아니다.
 
 ## 설계 결정
 
@@ -15,12 +15,14 @@
 | D7 | 초기 default는 raw data로 제한 | 이미 검증된 default model에서 원래 입력을 복원할 수 없어 재변환되는 문제를 피한다. |
 | D8 | 임의 Python 객체 타입은 제품 범위에서 제외 | 환경 설정 데이터의 주입이 목적이다. `arbitrary_types_allowed=False`를 고정하고 이를 True로 바꾸는 subclass도 거부한다. |
 | D9 | 환경 입력의 quote는 타입과 필드 정책에 따라 한 번만 처리 | bool·숫자·JSON의 외부 wrapper를 처리하되 문자열 데이터의 quote는 기본 보존한다. 문자열 제거는 명시적으로 선택한다. |
+| D10 | 개발 기준은 CPython 3.14.7, 지원 목표는 표준 CPython 3.10–3.14 | 3.14의 지연 annotation과 기반 의존성의 공개 API를 검증한다. pre-release·free-threaded/PyPy는 이번 지원 판정에서 제외한다. |
+| D11 | Kubernetes v1.37.1의 환경·파일 주입을 소비하며 API client는 추가하지 않음 | 라이브러리는 프로세스 환경과 로컬 파일을 읽는다. ConfigMap·Secret 조회·watch·Pod 재시작은 배포/application의 책임이다. |
 
 Pydantic Settings는 선택지가 아닌 기본 구현체다. 공개 `BaseSettings`, `SettingsConfigDict`, `PydanticBaseSettingsSource`, `settings_customise_sources`를 사용한다. 프로젝트의 profile/default/provenance 계약을 위한 source adapter를 추가하며 Settings를 생략하고 ConfigModel만 직접 검증하는 별도 backend는 제공하지 않는다. [Pydantic Settings custom source 공식 문서](https://docs.pydantic.dev/latest/concepts/pydantic_settings/#customise-settings-sources)
 
 ### Pydantic Settings 구성
 
-`ConfigModel`은 pydantic BaseModel 기반 도메인 타입이다. registry trie를 공개 `create_model()`로 합쳐 내부 **AggregateSettings(BaseSettings)** schema를 만든다. 실제 등록 path에는 ConfigModel 타입, 가상 ancestor에는 내부 grouping model을 배치한다. AggregateSettings 최상위 필드는 required로 두어 framework 기본 source에서 nested instance default를 재주입하지 않게 한다. Pydantic/BaseSettings의 보호된 field 이름은 schema compile에서 명확한 등록 오류로 거부한다.
+`ConfigModel`은 pydantic BaseModel 기반 도메인 타입이다. register에서 공개 `model_rebuild()`로 모델의 forward reference가 해석됐는지 확인한 뒤 `model_fields`의 FieldInfo.annotation을 읽는다. 해석할 수 없는 reference는 ConfigRegistrationError로 거부한다. Python 3.14의 지연 annotation에 대응하며 클래스 namespace의 `__annotations__`를 직접 분석하거나 annotation 관련 private API를 사용하지 않는다. registry trie를 공개 `create_model()`로 합쳐 내부 **AggregateSettings(BaseSettings)** schema를 만든다. 실제 등록 path에는 ConfigModel 타입, 가상 ancestor에는 내부 grouping model을 배치한다. AggregateSettings 최상위 필드는 required로 두어 framework 기본 source에서 nested instance default를 재주입하지 않게 한다. Pydantic/BaseSettings의 보호된 field 이름은 schema compile에서 명확한 등록 오류로 거부한다.
 
 load마다 독립적인 LoadContext와 bound AggregateSettings subclass를 만든다. 그 subclass의 `settings_customise_sources`는 컨텍스트를 가진 `PydConfigSource(PydanticBaseSettingsSource)` 하나만 반환한다. framework는 그 뒤 DefaultSettingsSource를 자동 추가할 수 있으며 required aggregate 필드에서는 그 결과가 빈 mapping이어야 한다. 선택 데이터를 제공하는 adapter는 하나지만 내부 호출 source 수가 언제나 하나라는 계약은 아니다. source의 `__call__`이 bootstrap부터 ResolvedInput 생성까지 아래 파이프라인을 실행하고 **검증용 복사본**을 반환한다. `get_field_value`도 공개 추상 계약대로 구현하며 raw 값이 diagnostics로 반환되지 않게 한다.
 
@@ -358,6 +360,18 @@ Pydantic Settings의 source debug 기능이 활성화된 경우에도 raw 입력
 
 예외는 normalized code와 source만으로 새로 구성한다. Pydantic의 error `input`, `ctx`, `msg`, YAML parser의 source snippet, python-dotenv 경고 원문, exception chain은 사용자 출력에서 제거한다. `raise sanitized_error from None`만으로 Python 객체의 원래 context가 사라지는 것은 아니므로 원본 exception을 보관하지 않고 except 블록을 벗어난 뒤 sanitized error를 발생시키는 구조로 구현한다. secret field validator가 입력을 오류 메시지에 넣은 경우에도 외부로 노출하지 않는다.
 
+## Kubernetes 환경과 주입 계약
+
+2026-09-26 기준 Kubernetes 공식 stable 채널 v1.37.1을 호환성 기준으로 둔다. API 호환 manifest 예제는 `v1` Namespace·ConfigMap·Secret과 `batch/v1` Job을 사용한다. Python 런타임과 Kubernetes 버전을 서로 묶는 의존성은 없다. pydconfig는 `kubernetes` Python SDK나 클러스터 인증정보를 요구하지 않는다.
+
+ConfigMap data, Secret stringData, env.value의 boolean·숫자·JSON은 문자열로 선언한다. YAML `"FALSE"`는 구문상의 quote가 제거된 FALSE라는 문자열이고 YAML `'"False"'`는 실제 quote를 포함한 문자열이다. 앱 프로세스에 들어온 후 기존 bool/quote 계약을 적용한다. `${VAR}`는 Kubernetes 환경 주입 단계에서 확장되지 않으며 pydconfig에서는 YAML origin의 살아남은 값에만 보간한다.
+
+Kubernetes가 envFrom source와 명시적 env를 처리한 결과는 하나의 OS environ source로 수집한다. 명시적 env가 같은 이름의 envFrom 값을 override하는 예제를 둔다. pydconfig의 explain은 OS 변수명을 기록하며 해당 값이 어느 ConfigMap/Secret에서 왔는지는 자동 추적하지 않는다. 앱이 `dotenv=False`를 선택한 배포에서도 profile은 `PYDCONFIG_PROFILE`로 지정할 수 있다.
+
+환경변수로 주입한 ConfigMap 값은 Pod 재시작 후 반영된다. 같은 프로세스에서 `loader.load()`만 호출해 Kubernetes의 새 환경값을 얻는다고 약속하지 않는다. projected YAML 파일 변경은 명시적 `loader.load()`로 읽으며 자동 reload는 제공하지 않는다. 파일을 포함한 ConfigMap은 envFrom용 변수와 분리하고 YAML parser에는 mounted 설정 파일만 전달한다. [Kubernetes ConfigMap 문서](https://kubernetes.io/docs/concepts/configuration/configmap/), [컨테이너 환경변수 정의](https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/)
+
+예제와 기반 검사는 [호환성 기준](compatibility-plan.md)에 연결한다. 현재 기반 probe와 공식 OpenAPI schema 검증은 전체 pydconfig 계약 시험이나 실제 클러스터에서의 라이브러리 실행을 대신하지 않는다.
+
 ## 이관 adapter 계약
 
 기존 변수명이 새 field 경로와 다르면 application bootstrap에서 **각 source mapping을 개별적으로** 정규 이름으로 변환한다. OS alias만 최우선 overrides에 넣어 dotenv/YAML source 순서를 바꾸는 방식은 사용하지 않는다. 같은 source에서 legacy·정규 이름을 동시에 선언하면 conflict 오류로 보고하고 임의 선택하지 않는다.
@@ -379,7 +393,7 @@ tests/contracts/
 examples/basic/
 ```
 
-필수 의존성은 `pydantic>=2.10,<3`, `pydantic-settings>=2,<3`, `python-dotenv`다. YAML reader에 `PyYAML`도 추가한다. 세 기반 라이브러리는 optional extra로 돌리지 않는다. prototype에서 공개 API·파서 오류 감지·source debug 계약을 확인해 구체적인 최소 버전과 지원 범위를 확정한다. 최신 버전 숫자는 문서 참조만으로 pin하지 않는다.
+필수 의존성의 v4 구현 기준은 `pydantic>=2.13.5,<3`, `pydantic-settings>=2.15,<3`, `python-dotenv>=1.2.3,<2`, YAML reader의 `PyYAML>=6.0.3,<7`이다. 세 기반 라이브러리는 optional extra로 돌리지 않는다. 최신 안정 기반의 검증 재현을 위해 requirements/compatibility.txt에는 확인한 버전을 정확히 고정했다. 그 파일의 jsonschema는 Kubernetes schema probe 전용이며 runtime 필수 의존성이 아니다. 배포 패키지의 Python 최소 버전은 3.10, 지원 검증 대상은 3.10–3.14다. 다른 의존성 조합으로 범위를 확대하려면 공개 API·파서 오류 감지·source debug 계약을 다시 검증한다.
 
 | Gate | 확인할 계약 | 기대 결과 |
 | --- | --- | --- |
@@ -393,5 +407,8 @@ examples/basic/
 | G8 diagnostics | YAML·dotenv·validator 메시지·chain·source debug에 secret sentinel 삽입 | 의존성 버전별 오류·repr·explain·report·debug log 원문 유출 없음 |
 | G9 distribution | wheel/sdist clean install, 지원 Python/Pydantic 조합, 타입 검사, 예제 실행 | 문서 API와 실제 설치된 패키지 일치 |
 | G10 boolean/quote | True/true/TRUE와 False 계열, 실제 quote·공백·단일 quote, 문자열·SecretStr 보존/unwrap, JSON 내부 quote, partial placeholder, quoted-empty fallback, unrelated replay | token 오해석 없음, wrapper 한 겹 처리, 입력 origin별 차이 일치, 문자열·JSON 구조 보존, 기존 입력 재정규화 없음 |
+| G11 compatibility | CPython 3.10–3.14의 G1–G10, Python 3.14 annotation/forward reference, 최신 Settings source debug, Kubernetes v1.37.1 ConfigMap·Secret·explicit env·projected YAML | 전체 구현 계약·패키징과 기반 probe를 구분해 통과를 기록하고 OS/env/file source 계약 유지 |
 
 G1–G8·G10은 prototype/MVP의 구현 gate다. 현 문서 리뷰 단계에서는 로컬 pydantic 2.13.0 / pydantic-settings 2.13.1에서 create_model·BaseSettings·custom source 구성과 disposable 입력 복사로 value=2→output=4의 독립 replay를 확인했다. python-dotenv 설치 버전은 1.2.1이다. v3 추가 요구에서는 Pydantic 단독이 boolean 대소문자 variant를 허용하고 actual quote·바깥 공백을 포함한 bool 문자는 거부하는 동작, python-dotenv가 파일 문법 quote는 제거하고 안쪽 실제 quote는 남기는 동작을 확인했다. 전체 라이브러리 구현이나 이 표의 전체 시험을 실행한 것은 아니다. 최신 공식 문서/source의 debug 기능은 로컬 설치 버전과 차이가 있어 release gate에서 별도로 확인한다. 사전 검증 adapter, 최소 의존성 버전, 라이선스·배포명 확정은 구현 단계에서 기록한다.
+
+위 실험은 v2/v3 당시 관찰이다. v4의 최신 의존성·Python 검증 상태와 CI 범위는 [호환성 기록](compatibility-plan.md)에 따로 기록한다. v3 문서 리뷰의 승인이 v4 추가 계약 또는 전체 G11의 통과를 뜻하지 않는다.
