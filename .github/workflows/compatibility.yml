@@ -44,7 +44,8 @@ jobs:
       - name: Check upstream settings APIs
         run: python scripts/check_compatibility.py
       - name: Run contracts against the installed wheel
-        run: python -m pytest -q
+        timeout-minutes: 3
+        run: python -m pytest -v -o faulthandler_timeout=30
       - name: Check installed package and file example
         run: python scripts/check_distribution.py
       - name: Type check public implementation
