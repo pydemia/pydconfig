@@ -10,4 +10,9 @@
 | [설계 리뷰](reviews/design-review.md) | 구조·설정 규칙 리뷰의 지적, 반영, 재검토 결과 |
 | [패키지 이름 변경](package-rename.md) | 배포명·import·저장소·실제 디렉터리 변경과 Codex 경로 전환 완료 |
 | [호환성 기준](compatibility-plan.md) | Python 3.10–3.14, 의존성 baseline, 실행 가능한 기반 probe와 검증 한계 |
+| [사용자 가이드](../docs/user-guide.md) | 기본 파일 예제, 이름·경로, 프로파일·환경변수·snapshot 사용 계약 |
+| [설정 규칙](../docs/configuration-reference.md) | API 옵션, 파싱·병합·boolean·quote·오류 reference |
+| [애플리케이션 연동](../docs/integration-guide.md) | 생성자 주입·FastAPI·테스트 격리·이관 |
+| [개발 가이드](../docs/development.md) | 기반 probe·CI, 구현 후 build·설치·release 절차 |
+| [Release 작업 기록](release-plan.md) | v1.0.0 요청, 배포 범위 확인, 문서·branch·검증 준비 상태 |
 | [최초 제안 원본](reviews/initial-proposal.md) | 첫 리뷰의 고정 baseline; 이름 변경 전 표기를 포함하며 현재 설계와 다를 수 있음 |

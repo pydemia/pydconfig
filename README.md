@@ -94,9 +94,8 @@ Windows 명령과 검사 항목은 [개발 가이드](docs/development.md#개발
 
 | 대상 | 확인한 결과 |
 | --- | --- |
-| Ubuntu Python 3.10·3.11·3.12·3.13·3.14.7 | 이전 commit의 기반 공개 API 검사 통과 |
+| Ubuntu Python 3.10·3.11·3.12·3.13·3.14.7 | 기반 공개 API 검사 통과 |
 | macOS·Windows Python 3.14.7 | 같은 기반 검사 통과 |
-| 이번 변경의 Python 호환성 검사 | CI 재실행 후 결과 기록 예정 |
 | pydconfig 라이브러리·wheel/sdist | 아직 구현·build·설치 검증 전 |
 
-[이전 7개 CI job 실행 결과](https://github.com/pydemia/pydconfig/actions/runs/36237714964)와 [상세 기록](.worknotes/compatibility-plan.md)을 제공합니다. 이 결과는 pydconfig 전체 기능의 지원 판정을 대신하지 않습니다.
+[7개 CI job 실행 결과](https://github.com/pydemia/pydconfig/actions/runs/36239341897)와 [상세 기록](.worknotes/compatibility-plan.md)을 제공합니다. 검증 code commit은 `0370734a007cf16a711a20f91474dd07945fea92`입니다. 이 결과는 pydconfig 전체 기능의 지원 판정을 대신하지 않습니다.

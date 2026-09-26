@@ -30,4 +30,7 @@
 - 기본 예제의 API 실행은 하지 않았다. 실제 라이브러리 구현이 없기 때문이다.
 - git diff --check를 통과했고 최초 리뷰 원본 SHA256이 기존 값과 일치한다.
 
-원격 CI 결과를 확인한 뒤 code commit·CI URL을 기록한다. 태그·GitHub Release는 범위 확정과 배포물 검증 뒤 진행한다.
+- code commit `0370734a007cf16a711a20f91474dd07945fea92`를 origin/release에 push하고 원격 branch의 존재를 확인했다.
+- [CI 실행 36239341897](https://github.com/pydemia/pydconfig/actions/runs/36239341897)의 7개 job이 모두 completed/success다. Ubuntu Python 3.10–3.14와 macOS·Windows 3.14.7에서 기반 API를 확인했다.
+
+검증 결과 기록은 문서만 변경하며 code 검증 commit과 구분한다. main은 release의 문서·probe 변경을 fast-forward로 반영한다. 태그·GitHub Release는 범위 확정과 배포물 검증 뒤 진행한다.

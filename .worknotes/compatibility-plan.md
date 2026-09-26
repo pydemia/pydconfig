@@ -46,4 +46,7 @@ python scripts/check_compatibility.py
 
 ## 이번 변경의 실행 기록
 
-Python 설정 API만 대상으로 정리한 probe와 CI를 다시 실행한 뒤 commit·실행 결과를 기록한다. 이전 CI의 성공을 이번 변경의 완료 결과로 재사용하지 않는다.
+- macOS CPython 3.14.4·3.13.13에서 수정한 probe를 통과했다.
+- Python 설정 API만 대상으로 정리한 code commit `0370734a007cf16a711a20f91474dd07945fea92`의 [CI](https://github.com/pydemia/pydconfig/actions/runs/36239341897)가 completed/success다.
+- Ubuntu의 Python 3.10·3.11·3.12·3.13·3.14.7, macOS·Windows 3.14.7의 7개 job을 각각 completed/success로 확인했다.
+- 이 결과는 기반 API 호환성 판정이다. ConfigLoader 구현·smart quote·전체 G1–G11·wheel 설치는 아직 검증되지 않았다.
