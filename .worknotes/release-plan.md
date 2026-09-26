@@ -35,3 +35,15 @@
 ## v1.0.0 구현 검증 진행
 
 src/pydconfig와 build metadata, 계약 시험을 작성했다. macOS CPython 3.14.4에서 172개 시험이 통과했고 타입·배포물·플랫폼 검증은 진행 중이다. CI는 설치한 wheel에 전체 계약 시험을 실행하도록 변경한다. 태그와 GitHub Release는 이 검증이 통과한 commit을 가리키게 한다. 완료 결과와 PyPI 상태는 검증 후 기록한다.
+
+## 최종 구현·플랫폼 검증
+
+검증 code/test commit: `790a3d05790fe81ef462bb4134a33f0f28da7ab1`. [CI 36245893892](https://github.com/pydemia/pydconfig/actions/runs/36245893892)는 7개 job 모두 completed/success다. Ubuntu CPython 3.10·3.11·3.12·3.13·3.14.7, macOS·Windows 3.14.7에서 sdist→wheel build, 실제 wheel 설치 후 계약 시험, 기본 예제, upstream probe, mypy, Ruff, pip check, twine check를 완료했다.
+
+로컬 CPython 3.14.4에서는 계약 시험 173개와 mypy 15개 source 파일, Ruff를 통과했다. checkout 밖 별도 venv에 wheel을 설치한 뒤 같은 173개 시험, site-packages import·version·py.typed·기본 파일 예제, pip check와 twine check를 확인했다. 이 build는 sdist를 먼저 만들고 그 sdist로 wheel을 만든다. 사용자 문서 6개에서 Python block 17개를 compile하고 local link/anchor 25개를 확인했다. FastAPI 0.141.1·httpx 0.28.1·Starlette 1.7.0의 문서 예제는 생성자 주입, snapshot override와 독립된 두 app의 TestClient 호출을 로컬에서 확인했다. FastAPI는 core/CI 의존성이나 모든 버전 지원 선언에 포함하지 않는다.
+
+첫 CI의 Windows 계약 단계가 오래 실행돼 취소했다. 진단 verbose 실행에서 oversized fixture의 자동 test ID가 1 MiB 원문을 포함해 수 MB 로그를 만드는 문제를 확인했다. 짧은 explicit ID, concise 출력, 3분 step 제한과 faulthandler를 적용한 최종 CI가 모든 플랫폼에서 통과했다. 취소된 run 36245085310·36245623148은 최종 성공 근거로 재사용하지 않는다. 원격 로그 다운로드는 BlobNotFound로 확보하지 못했으며, 실제 job·step의 success와 로컬 시험 출력을 검증 증거로 사용한다.
+
+배포 파일 검사는 py.typed 포함, wheel 내 tests·dotenv 파일 제외, sdist 내 예제 dotenv template 포함 및 실제 dotenv 제외를 확인했다. 코드·문서에서 credential pattern을 발견하지 않았고 최초 리뷰 원본 SHA256은 기존 값과 일치한다. 저작자·라이선스 값은 사용자 결정이 없어 metadata에 임의로 넣지 않았다.
+
+이 기록 commit은 문서만 변경한다. 실행 code·test·workflow는 위 검증 commit과 같다. 최종 tag·GitHub Release·PyPI의 외부 게시 상태는 게시 후 별도로 확인해 기록한다.

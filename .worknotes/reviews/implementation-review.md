@@ -22,3 +22,5 @@ Maintenance와 Setting은 public Settings source·FieldInfo 기반, 기본 nativ
 ## 실행 증거
 
 macOS CPython 3.14.4: 계약 시험 173개 통과, mypy 15개 implementation 파일 통과, Ruff 통과. wheel·sdist build와 파일 구성 검사를 통과했다. 최초 리뷰 원본 SHA256은 662877e0cac8f8aeb59d669bfa033bcbf3caa8a20d917a2bdf734552db779ab5로 보존됐다. 플랫폼 CI·설치·배포의 최종 결과는 [release 기록](../release-plan.md)에 기록한다. 이 시점의 로컬 시험만으로 원격 7개 job·release·PyPI 완료를 주장하지 않는다.
+
+최종 플랫폼 확인: code/test commit 790a3d05790fe81ef462bb4134a33f0f28da7ab1의 [CI 36245893892](https://github.com/pydemia/pydconfig/actions/runs/36245893892) 7개 job이 모두 success다. 각 job은 설치한 wheel에 계약 시험·예제·타입·형식·metadata·의존성 검사를 실행한다. 배포 직전 문서 기록 변경은 실행 code/test/workflow를 바꾸지 않는다. 검토한 범위에서 남은 기능 결함은 발견하지 않았다. PyPI/GitHub 외부 게시 완료는 해당 API와 다운로드 검증으로 별도 판단한다.

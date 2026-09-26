@@ -96,3 +96,7 @@ python3.14 -m venv .venv
 Windows 명령과 배포물 검증은 [개발 가이드](docs/development.md)에 있습니다. CI는 Ubuntu Python 3.10–3.14, macOS·Windows Python 3.14에서 sdist로 wheel을 만들고 설치한 패키지에 계약 시험과 파일 예제를 실행합니다. 로컬 개발의 editable 설치와 배포물 검증은 구분합니다.
 
 지원 범위는 표준 CPython입니다. PyPy, free-threaded Python, 3.15 이상, 여러 프로파일 동시 병합, 자동 파일 watch와 임의 객체 타입은 지원하지 않습니다. alias와 중첩 container의 범위는 [설정 규칙](docs/configuration-reference.md#지원-타입)에 명시합니다.
+
+## 검증 결과
+
+[최종 CI](https://github.com/pydemia/pydconfig/actions/runs/36245893892)의 7개 job이 통과했습니다. source 우선순위, profile, interpolation, boolean·quote, strict 파싱, 독립 replay와 값 없는 진단을 계약 시험으로 확인했습니다. wheel·sdist와 실행 예제 검증의 상세 근거는 [release 기록](.worknotes/release-plan.md)에 있습니다.
