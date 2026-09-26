@@ -47,3 +47,19 @@ src/pydconfig와 build metadata, 계약 시험을 작성했다. macOS CPython 3.
 배포 파일 검사는 py.typed 포함, wheel 내 tests·dotenv 파일 제외, sdist 내 예제 dotenv template 포함 및 실제 dotenv 제외를 확인했다. 코드·문서에서 credential pattern을 발견하지 않았고 최초 리뷰 원본 SHA256은 기존 값과 일치한다. 저작자·라이선스 값은 사용자 결정이 없어 metadata에 임의로 넣지 않았다.
 
 이 기록 commit은 문서만 변경한다. 실행 code·test·workflow는 위 검증 commit과 같다. 최종 tag·GitHub Release·PyPI의 외부 게시 상태는 게시 후 별도로 확인해 기록한다.
+
+## 원격 게시 완료와 PyPI 수동 업로드
+
+main·release에 배포 commit `3c687c9c2c4c2d270d363312071c13986b9ceeda`를 push하고 annotated `v1.0.0`을 생성·push했다. 원격 tag object `03cf55e396eff8cd650c16d85c701283bcc6c401`의 대상이 이 commit임을 GitHub API로 확인했다.
+
+[GitHub Release v1.0.0](https://github.com/pydemia/pydconfig/releases/tag/v1.0.0)는 draft=false, prerelease=false다. wheel·sdist·SHA256SUMS.txt의 uploaded 상태·파일 크기·GitHub digest를 확인했고, 세 파일을 실제 다운로드해 로컬 배포물과 SHA256이 일치함을 확인했다.
+
+| 파일 | 크기 | SHA256 |
+| --- | --- | --- |
+| pydconfig-1.0.0-py3-none-any.whl | 25,700 bytes | bec96f3670ccfe1925950a5ca9664c3b22924d26a80cf6d8f19ea44605854798 |
+| pydconfig-1.0.0.tar.gz | 94,427 bytes | 4096e1454d48cf11d86e9ed0b2dd552101119a4726c2cfea7802b11f329839dd |
+| SHA256SUMS.txt | 188 bytes | e61dda0b6c6be462cbd1860c409818b5dfccad141ae61796094bb1da0ae19fa2 |
+
+PyPI 업로드는 기존 twine 인증 설정을 사용해 공식 https://upload.pypi.org/legacy/ 대상으로 non-interactive 실행했다. `CERTIFICATE_VERIFY_FAILED: self-signed certificate in certificate chain`으로 실패했다. 인증서 검증을 끄거나 credential을 공개하지 않았으며 인증 유효성은 이 실패로 판단할 수 없다. 사후 PyPI pydconfig/1.0.0 JSON 조회는 HTTP 404다. 사용자가 요청한 수동 fallback을 적용하며 검증된 dist 또는 GitHub Release 파일을 [수동 업로드 절차](../docs/development.md#pypi-수동-업로드)에 따라 올릴 수 있다.
+
+이번 단락은 외부 게시 후 확인한 결과를 보관하는 문서 기록이다. main·release에 문서 commit으로 반영하고 이미 게시한 v1.0.0 tag와 배포 파일은 변경하지 않는다. 실행 source·test·workflow·metadata는 tag와 동일하다.
