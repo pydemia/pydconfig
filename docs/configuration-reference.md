@@ -1,6 +1,6 @@
 # 설정 규칙
 
-pydconfig 1.0.0의 공개 API와 입력 처리 규칙이다. 코드 예제의 기반 모델 선언은 [사용자 가이드](user-guide.md)에 있다.
+pydconfig 1.0.1의 공개 API와 입력 처리 규칙이다. 코드 예제의 기반 모델 선언은 [사용자 가이드](user-guide.md)에 있다.
 
 ## ConfigLoader 옵션
 

@@ -1,102 +1,291 @@
 # pydconfig
 
-Python 애플리케이션의 설정을 이름별로 등록하고, YAML·dotenv·환경변수를 타입이 있는 설정 모델로 읽어 주입하기 위한 라이브러리입니다. 기본 구현은 **pydantic, pydantic-settings, python-dotenv**를 사용합니다.
+pydconfig loads named, typed application settings from YAML files, dotenv
+files, and environment variables. Declare settings as Pydantic models,
+register them with a loader, and retrieve a validated snapshot before
+creating application resources such as database clients.
 
-`ConfigLoader`, `ConfigModel`, `ConfigSnapshot`으로 이름별 등록, nested 모델, 프로파일, 환경변수 바인딩과 YAML 보간을 제공합니다. 배포명과 import 이름은 `pydconfig`이며 표준 CPython **3.10–3.14**를 지원합니다.
+It builds on **pydantic**, **pydantic-settings**, **python-dotenv**, and
+**PyYAML**. The package and import name are both `pydconfig`. Supported
+interpreters are standard CPython **3.10–3.14**.
 
-## 설치
-
-GitHub Release의 wheel을 설치합니다.
+## Installation
 
 ```bash
-python -m pip install https://github.com/pydemia/pydconfig/releases/download/v1.0.0/pydconfig-1.0.0-py3-none-any.whl
+python -m pip install pydconfig==1.0.1
 ```
 
-[배포물과 변경 내역](https://github.com/pydemia/pydconfig/releases/tag/v1.0.0). PyPI 업로드 결과는 [release 기록](.worknotes/release-plan.md)에 별도로 기록합니다.
+## Quickstart
 
-## 문서
-
-| 문서 | 내용 |
-| --- | --- |
-| [사용자 가이드](docs/user-guide.md) | 빠른 시작, 이름별 등록, nested 모델, 프로파일, 보간, snapshot과 override |
-| [설정 규칙](docs/configuration-reference.md) | API 옵션, source 우선순위, boolean·quote, JSON, 타입·파일·오류 계약 |
-| [애플리케이션 연동](docs/integration-guide.md) | 생성자 주입, FastAPI app별 설정, 테스트 격리, 기존 설정 이관 |
-| [개발·검증·배포 가이드](docs/development.md) | 개발 환경, 계약 시험, wheel/sdist 설치·release 절차 |
-| [기획서](.worknotes/product-plan.md) · [설계서](.worknotes/technical-design.md) | 요구사항 R1–R14, 구현 구조, release gate G1–G11 |
-| [리뷰 기록](.worknotes/configuration-library-design.md) | 기획·설계 리뷰와 변경 이력 |
-
-## 기능
-
-- 같은 모델을 `primary_db`, `replica_db`처럼 서로 다른 이름·경로로 등록합니다.
-- 코드 기본값, 기본·프로파일 YAML, 기본·프로파일 dotenv, OS 환경변수, 명시적 override 순으로 값을 적용합니다.
-- `PYDCONFIG_DATABASE__POOL__SIZE`로 `database.pool.size`를 바꿉니다. YAML에 placeholder가 없어도 바인딩합니다.
-- YAML `${DB_HOST}`, `${PORT:-5432}`, `$${LITERAL}`을 지원합니다. dotenv와 OS 문자열은 재보간하지 않습니다.
-- YAML 최상단 `profile` 또는 `PYDCONFIG_PROFILE`로 `.env.local`, `.env.test`, `.env.stg`, `.env.prd`를 선택합니다. 기본 `.env`도 함께 읽습니다.
-- `True/true/TRUE`, `False/false/FALSE`를 같은 boolean으로 읽고, bool·숫자·JSON 환경 입력의 바깥 quote 한 쌍을 처리합니다. 일반 문자열과 비밀값의 quote는 기본 보존합니다.
-- 시작 시 모든 등록 설정을 검증합니다. 조회와 override는 원본 snapshot을 보존하며, 출처 진단은 원문 값을 출력하지 않습니다.
-- 설정 필드는 환경 설정 데이터로 제한합니다. 클라이언트·서비스 인스턴스 등 임의 Python 객체 타입은 지원하지 않습니다.
-
-낮은 우선순위부터 적용합니다.
+Create these files:
 
 ```text
-코드 기본값 < config.yaml < config.<profile>.yaml
-           < .env < .env.<profile> < OS 환경변수 < 명시적 overrides
+my-app/
+  app.py
+  config/
+    config.yaml
 ```
 
-프로파일 선택은 별도 순서입니다.
-
-```text
-load(profile=...) > OS PYDCONFIG_PROFILE > .env PYDCONFIG_PROFILE
-                  > config.yaml의 최상단 profile > 선택 없음
-```
-
-## 빠른 시작
-
-아래 예제는 설정 파일이 없는 경로를 지정하며 `environ={}`는 실제 OS 환경을 제외합니다.
+`app.py` defines a nested database model and a separate feature model:
 
 ```python
+import json
+from pathlib import Path
+
 from pydantic import Field
 from pydconfig import ConfigLoader, ConfigModel
 
 
 class PoolConfig(ConfigModel):
-    size: int = Field(default=10, ge=1)
+    size: int = Field(default=10, ge=1, le=100)
+    timeout: float = Field(default=5.0, gt=0)
 
 
 class DatabaseConfig(ConfigModel):
     host: str = "localhost"
+    port: int = Field(default=5432, ge=1, le=65535)
     pool: PoolConfig = Field(default_factory=PoolConfig)
 
 
-loader = ConfigLoader(root_dir="/path/to/empty-config-dir", dotenv=False)
-loader.register("primary_db", DatabaseConfig, path="database.primary")
-snapshot = loader.load(environ={
-    "PYDCONFIG_DATABASE__PRIMARY__HOST": "db.internal",
-    "PYDCONFIG_DATABASE__PRIMARY__POOL__SIZE": '"20"',
-})
+class FeatureConfig(ConfigModel):
+    enabled: bool = False
+    hosts: list[str] = Field(default_factory=list)
 
-database = snapshot.get("primary_db", DatabaseConfig)
-assert database.host == "db.internal"
-assert database.pool.size == 20
+
+loader = ConfigLoader(root_dir=Path(__file__).resolve().parent / "config")
+loader.register("database", DatabaseConfig)
+loader.register("feature", FeatureConfig)
+snapshot = loader.load()
+
+database = snapshot.get("database", DatabaseConfig)
+feature = snapshot.get("feature", FeatureConfig)
+print(json.dumps({
+    "host": database.host,
+    "port": database.port,
+    "pool_size": database.pool.size,
+    "pool_timeout": database.pool.timeout,
+    "feature_enabled": feature.enabled,
+    "feature_hosts": feature.hosts,
+}))
 ```
 
-`get()`은 등록 **이름**, 환경변수와 `explain()`은 설정 **경로**를 사용합니다. 전체 파일 예제는 [examples/basic](examples/basic/README.md)에 있습니다.
+`config/config.yaml` uses the registration names as its top-level keys:
 
-## 개발과 검증
+```yaml
+database:
+  host: localhost
+  port: 5432
+  pool:
+    size: 16
+feature:
+  enabled: false
+  hosts: [primary, replica]
+```
+
+Run `python app.py`. With no matching environment variables or dotenv files,
+the output is:
+
+```json
+{"host": "localhost", "port": 5432, "pool_size": 16, "pool_timeout": 5.0, "feature_enabled": false, "feature_hosts": ["primary", "replica"]}
+```
+
+`pool.timeout` comes from its model default. YAML supplies `pool.size`
+without replacing the remaining nested defaults. `load()` validates every
+registered model before returning a snapshot; a missing required field,
+unknown field, or invalid port raises a configuration error.
+
+## Nested configuration
+
+Nested models must also inherit from `ConfigModel`. Use
+`Field(default_factory=ChildModel)` to make a nested section available even
+when no source supplies it. A required declaration such as
+`pool: PoolConfig` must receive a section from a source.
+
+Names used by application code can differ from paths used by configuration:
+
+```python
+loader = ConfigLoader(root_dir="config")
+loader.register("primary_db", DatabaseConfig, path="database.primary")
+loader.register("replica_db", DatabaseConfig, path="database.replica")
+snapshot = loader.load()
+primary = snapshot.get("primary_db", DatabaseConfig)
+```
+
+For these registrations, YAML contains `database.primary` and
+`database.replica`. The environment variable for the primary host is
+`PYDCONFIG_DATABASE__PRIMARY__HOST`; `get()` still uses `primary_db`.
+Overrides and `explain()` also use configuration paths.
+
+Models support scalar settings, nullable fields, nested `ConfigModel`
+fields, and scalar containers such as `list[str]` and `dict[str, int]`.
+Containers of models, recursive models, arbitrary Python objects, and
+field aliases are unsupported. Keep clients and loggers outside your
+configuration models.
+
+## YAML files and profiles
+
+The default YAML file is `config.yaml` under `root_dir`. To use a different
+name or a `.yml` extension, specify it explicitly:
+
+```python
+loader = ConfigLoader(root_dir="config", yaml_file="settings.yml")
+```
+
+The default file is optional. An explicitly supplied `yaml_file` must
+exist. Existing files must contain one YAML document with a mapping at the
+root and string keys. Duplicate keys, anchors, aliases, explicit tags, and
+YAML merge keys are rejected. Ordinary nested mappings and scalar lists
+are supported.
+
+Add `profile: local` to the base `config.yaml` to load
+`config.local.yaml` as well. For a custom `settings.yml`, the corresponding
+file is `settings.local.yml`. Profile files contain only the values they
+override:
+
+```yaml
+database:
+  host: local-db.internal
+  pool:
+    timeout: 2.5
+```
+
+You can also select a profile with `load(profile="local")` or the
+`PYDCONFIG_PROFILE` environment variable. The
+[user guide](https://github.com/pydemia/pydconfig/blob/main/docs/user-guide.md#profiles)
+explains selection order, allowed profiles, and required profile files.
+
+YAML string values can reference environment variables without the
+`PYDCONFIG_` prefix:
+
+```yaml
+database:
+  host: "${DB_HOST:-localhost}"
+  port: "${DB_PORT:-5432}"
+```
+
+`${VAR}` requires a defined variable. `${VAR:-fallback}` uses the literal
+fallback if the variable is undefined or empty. `$${VAR}` produces the
+literal text `${VAR}`. Interpolation runs once, after parsing and merging,
+on YAML values that remain in use. It never rewrites YAML keys or reparses
+injected text as YAML.
+
+## Environment variables and dotenv
+
+The default prefix is `PYDCONFIG_`. Write configuration paths in uppercase
+and replace each dot with `__`:
+
+| Configuration path | Environment variable |
+| --- | --- |
+| `database.host` | `PYDCONFIG_DATABASE__HOST` |
+| `database.pool.size` | `PYDCONFIG_DATABASE__POOL__SIZE` |
+| `feature.enabled` | `PYDCONFIG_FEATURE__ENABLED` |
+| `feature.hosts` | `PYDCONFIG_FEATURE__HOSTS` |
+
+For the quickstart above, override nested values in Bash:
+
+```bash
+export PYDCONFIG_DATABASE__POOL__SIZE=40
+export PYDCONFIG_FEATURE__ENABLED=TRUE
+python app.py
+```
+
+Or in PowerShell:
+
+```powershell
+$env:PYDCONFIG_DATABASE__POOL__SIZE = '40'
+$env:PYDCONFIG_FEATURE__ENABLED = 'TRUE'
+python app.py
+```
+
+The result has `pool_size` equal to `40` and `feature_enabled` equal to
+`true`. No YAML placeholder is needed for direct field binding.
+
+Put the same keys in `config/.env` for local defaults. If `local` is the
+selected profile, `config/.env.local` is loaded after that base file:
+
+```dotenv
+PYDCONFIG_DATABASE__POOL__SIZE=24
+PYDCONFIG_FEATURE__ENABLED=false
+PYDCONFIG_FEATURE__HOSTS=["primary","replica"]
+```
+
+Lists, dictionaries, and whole model sections accept JSON environment
+values. An environment variable such as
+`PYDCONFIG_FEATURE__HOSTS__0` cannot update a list element; supply the whole
+list instead.
+
+`env_prefix="MYAPP_"` changes field binding to names such as
+`MYAPP_DATABASE__HOST`. Profile selection always uses `PYDCONFIG_PROFILE`.
+`dotenv=False` disables dotenv files while preserving OS environment
+binding. `load(environ={...})` uses the supplied mapping instead of the
+process environment, and `load(environ={})` excludes the OS environment.
+The loader does not modify `os.environ`.
+
+Boolean strings accept `true`, `false`, `1`, and `0`, ignoring case. Tokens
+such as `yes`, `no`, `on`, and `off` are rejected. For numeric, boolean, and
+JSON environment input, one matching pair of outer quotes is removed.
+String and secret fields preserve literal quotes by default. See the
+[quote rules](https://github.com/pydemia/pydconfig/blob/main/docs/user-guide.md#booleans-and-quotes)
+for shell quoting and field-specific policies.
+
+## Source precedence and snapshots
+
+Later sources override earlier sources:
+
+```text
+model defaults < base YAML < profile YAML < .env < .env.<profile>
+               < OS environment < explicit overrides
+```
+
+Mappings merge recursively. Lists and scalar values replace earlier
+values. Explicit overrides use the same structure as the YAML root:
+
+```python
+snapshot = loader.load(
+    overrides={"database": {"pool": {"size": 48}}},
+)
+database = snapshot.get("database", DatabaseConfig)
+assert database.pool.size == 48
+
+changed = snapshot.with_overrides({"database": {"pool": {"size": 12}}})
+assert changed.get("database", DatabaseConfig).pool.size == 12
+assert snapshot.get("database", DatabaseConfig).pool.size == 48
+```
+
+`get()` returns a deep copy. `with_overrides()` validates a new snapshot
+without rereading files or the environment. Call `loader.load()` again to
+read changed external settings. File watching and automatic client
+reconfiguration are not provided.
+
+Use `snapshot.explain("database.pool.size")` and
+`snapshot.source_report()` to inspect source metadata without exposing
+configuration values.
+
+## Documentation
+
+| Document | Contents |
+| --- | --- |
+| [User guide](https://github.com/pydemia/pydconfig/blob/main/docs/user-guide.md) | Runnable quickstart, nested models, YAML, environment variables, profiles, snapshots, and troubleshooting |
+| [Configuration reference](https://github.com/pydemia/pydconfig/blob/main/docs/configuration-reference.md) | Exact API, supported types, parsing rules, limits, and errors; in Korean |
+| [Application integration](https://github.com/pydemia/pydconfig/blob/main/docs/integration-guide.md) | Constructor injection, FastAPI, and test isolation; in Korean |
+| [Development guide](https://github.com/pydemia/pydconfig/blob/main/docs/development.md) | Build, validation, and publishing instructions; in Korean |
+| [Bundled file example](https://github.com/pydemia/pydconfig/tree/main/examples/basic) | Base and profile YAML, dotenv templates, and a runnable application |
+
+## Development and compatibility
 
 ```bash
 git clone https://github.com/pydemia/pydconfig.git
 cd pydconfig
-python3.14 -m venv .venv
+python -m venv .venv
 .venv/bin/python -m pip install -e '.[dev]'
 .venv/bin/python -m pytest -q
 .venv/bin/python -m mypy
 ```
 
-Windows 명령과 배포물 검증은 [개발 가이드](docs/development.md)에 있습니다. CI는 Ubuntu Python 3.10–3.14, macOS·Windows Python 3.14에서 sdist로 wheel을 만들고 설치한 패키지에 계약 시험과 파일 예제를 실행합니다. 로컬 개발의 editable 설치와 배포물 검증은 구분합니다.
+On Windows, use `.venv\Scripts\python.exe`. The compatibility workflow
+builds a wheel from an sdist, installs it, and runs tests, the bundled file
+example, upstream API probes, mypy, Ruff, and package checks. Its matrix
+covers Ubuntu CPython 3.10–3.14 and macOS/Windows CPython 3.14.
 
-지원 범위는 표준 CPython입니다. PyPy, free-threaded Python, 3.15 이상, 여러 프로파일 동시 병합, 자동 파일 watch와 임의 객체 타입은 지원하지 않습니다. alias와 중첩 container의 범위는 [설정 규칙](docs/configuration-reference.md#지원-타입)에 명시합니다.
-
-## 검증 결과
-
-[최종 CI](https://github.com/pydemia/pydconfig/actions/runs/36245893892)의 7개 job이 통과했습니다. source 우선순위, profile, interpolation, boolean·quote, strict 파싱, 독립 replay와 값 없는 진단을 계약 시험으로 확인했습니다. wheel·sdist와 실행 예제 검증의 상세 근거는 [release 기록](.worknotes/release-plan.md)에 있습니다.
+PyPy, free-threaded Python, Python 3.15 and later, merging multiple
+profiles, and arbitrary object settings are outside the supported scope.

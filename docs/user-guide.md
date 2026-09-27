@@ -1,12 +1,40 @@
-# 사용자 가이드
+# User guide
 
-pydconfig 1.0.0의 사용법이다. 설치는 [README](../README.md#설치), 개발·시험 방법은 [개발 가이드](development.md)를 따른다. 전체 파일 예제는 설치된 wheel에서 실행하고 출력까지 검사한다.
+This guide covers pydconfig 1.0.1. It starts with a complete application,
+then explains how nested models, YAML, dotenv files, and environment
+variables produce a validated configuration snapshot. The
+[configuration reference](configuration-reference.md) specifies the exact
+API and input restrictions in Korean.
 
-## 빠른 시작
+## Installation
 
-`ConfigModel`에는 호스트, 포트, timeout처럼 환경 설정 데이터만 선언한다. 데이터베이스 client나 logger는 설정 로딩에 성공한 뒤 애플리케이션에서 생성한다.
+Use standard CPython 3.10–3.14:
+
+```bash
+python -m pip install pydconfig==1.0.1
+```
+
+`ConfigModel` represents configuration data such as hosts, ports, timeouts,
+and feature flags. Create database clients, loggers, and other resources
+after configuration has loaded successfully.
+
+## Quickstart
+
+Create a directory with this layout:
+
+```text
+my-app/
+  app.py
+  config/
+    config.yaml
+```
+
+Save the following as `app.py`:
 
 ```python
+import json
+from pathlib import Path
+
 from pydantic import Field
 from pydconfig import ConfigLoader, ConfigModel
 
@@ -27,31 +55,28 @@ class FeatureConfig(ConfigModel):
     hosts: list[str] = Field(default_factory=list)
 
 
-loader = ConfigLoader(root_dir="/path/to/app-config")
+loader = ConfigLoader(root_dir=Path(__file__).resolve().parent / "config")
 loader.register("database", DatabaseConfig)
 loader.register("feature", FeatureConfig)
 snapshot = loader.load()
 
 database = snapshot.get("database", DatabaseConfig)
 feature = snapshot.get("feature", FeatureConfig)
+print(json.dumps({
+    "host": database.host,
+    "port": database.port,
+    "pool_size": database.pool.size,
+    "pool_timeout": database.pool.timeout,
+    "feature_enabled": feature.enabled,
+    "feature_hosts": feature.hosts,
+}))
 ```
 
-`root_dir`에 파일을 둔다.
-
-```text
-app-config/
-  config.yaml
-  config.local.yaml
-  .env
-  .env.local
-```
-
-`config.yaml`:
+Save this as `config/config.yaml`:
 
 ```yaml
-profile: local
 database:
-  host: "${DB_HOST:-localhost}"
+  host: localhost
   port: 5432
   pool:
     size: 16
@@ -60,58 +85,102 @@ feature:
   hosts: [primary, replica]
 ```
 
-`config.local.yaml`:
+From `my-app`, run `python app.py`. With no matching OS variables or dotenv
+files, the output is:
+
+```json
+{"host": "localhost", "port": 5432, "pool_size": 16, "pool_timeout": 5.0, "feature_enabled": false, "feature_hosts": ["primary", "replica"]}
+```
+
+`pool.size` comes from YAML, while `pool.timeout` retains its default of
+`5.0`. `load()` validates all registered sections before returning a
+snapshot. For example, `port: 70000` fails the `le=65535` constraint and
+raises `ConfigValidationError` before settings can be retrieved.
+
+To ignore the process environment, use `loader.load(environ={})`. This
+still reads YAML and dotenv files. To exclude dotenv as well, construct
+the loader with `dotenv=False`.
+
+## Nested models and defaults
+
+Every nested configuration model must inherit from `ConfigModel`:
+
+```python
+class DatabaseConfig(ConfigModel):
+    host: str = "localhost"
+    port: int = Field(default=5432, ge=1, le=65535)
+    pool: PoolConfig = Field(default_factory=PoolConfig)
+```
+
+The YAML and environment paths are `database.pool.size` and
+`PYDCONFIG_DATABASE__POOL__SIZE`. Supplying only the nested `size` preserves
+the other child defaults:
 
 ```yaml
 database:
-  host: local-db.internal
   pool:
-    timeout: 2.5
+    size: 20
 ```
 
-`.env`:
+Use the child class as the default factory. The loader expands its raw
+defaults before merging sources and validates the resulting input
+afterward. Do not use an already validated `PoolConfig()` instance as a
+field default.
 
-```dotenv
-PYDCONFIG_DATABASE__POOL__SIZE=24
-PYDCONFIG_FEATURE__ENABLED=TRUE
-```
-
-`.env.local`:
-
-```dotenv
-PYDCONFIG_DATABASE__POOL__SIZE=32
-PYDCONFIG_FEATURE__ENABLED='"False"'
-```
-
-OS에 같은 이름의 변수가 없으면 다음 값이 나온다.
-
-| 필드 | 결과 | 적용 source |
-| --- | --- | --- |
-| `snapshot.profile` | `local` | 기본 YAML |
-| `database.host` | `local-db.internal` | 프로파일 YAML; 가려진 기본 YAML의 placeholder는 평가하지 않음 |
-| `database.port` | `5432` | 기본 YAML |
-| `database.pool.size` | `32` | 프로파일 dotenv |
-| `database.pool.timeout` | `2.5` | 프로파일 YAML |
-| `feature.enabled` | `False` | 프로파일 dotenv의 실제 quote 한 쌍 제거 후 boolean 해석 |
-| `feature.hosts` | `["primary", "replica"]` | 기본 YAML |
-
-OS의 `PYDCONFIG_DATABASE__POOL__SIZE=40`은 32를 덮는다. `load(overrides={"database": {"pool": {"size": 48}}})`는 OS 값도 덮는다. 전체 파일은 [기본 예제](../examples/basic/README.md)에 제공한다.
-
-## 이름과 설정 경로
-
-등록 이름은 애플리케이션이 조회할 때 쓰는 식별자다. 설정 경로는 YAML, 환경변수, override와 출처 진단이 사용하는 위치다. `path`를 생략하면 이름과 경로가 같다.
+To customize part of the default input, return a raw mapping:
 
 ```python
-loader = ConfigLoader(root_dir="/path/to/config")
+class DatabaseConfig(ConfigModel):
+    pool: PoolConfig = Field(default_factory=lambda: {"size": 20})
+```
+
+This defaults `size` to `20` and retains the child schema's `timeout`.
+Factories must take no arguments. Raw scalar or container factories run
+once per load, even if later sources override their results. Factories
+returning validated model instances or depending on earlier validated
+fields are unsupported. Keep file reading and resource creation outside
+factories and validators.
+
+| Declaration | Result when all sources omit `pool` |
+| --- | --- |
+| `pool: PoolConfig` | Required section; loading fails |
+| `pool: PoolConfig = Field(default_factory=PoolConfig)` | Creates the section from child defaults |
+| `pool: PoolConfig \| None = None` | Leaves the section as `None` |
+
+Supplying `pool: {}` creates a required section and allows child defaults
+to apply; any missing required child fields still fail validation. Actual
+YAML `null` does not mean "use defaults". The field must permit `None` to
+accept it.
+
+Mappings merge recursively. Lists and tuples are replaced as whole
+values. A scalar or `null` replaces an earlier subtree; if a later mapping
+recreates it, deleted YAML values and custom parent defaults do not
+reappear. Child schema defaults may fill missing fields.
+
+Supported containers include `list[str]`, `tuple[int, ...]`, and
+`dict[str, float]`, with supported scalar or nullable scalar elements.
+Fixed nested `ConfigModel` levels are supported. Recursive schemas,
+containers of models or other containers, arbitrary objects, general
+`BaseModel` children, and field aliases are rejected at registration.
+
+## Registration names and configuration paths
+
+A registration name identifies a model in application code. Its path
+identifies its section in YAML, environment variables, overrides, and
+diagnostics. Omitting `path` makes it equal to the name.
+
+Register the same type under separate paths:
+
+```python
+loader = ConfigLoader(root_dir="config")
 loader.register("primary_db", DatabaseConfig, path="database.primary")
 loader.register("replica_db", DatabaseConfig, path="database.replica")
 snapshot = loader.load()
-
 primary = snapshot.get("primary_db", DatabaseConfig)
 replica = snapshot.get("replica_db", DatabaseConfig)
 ```
 
-이 등록은 다음 YAML과 연결한다.
+These registrations use this YAML:
 
 ```yaml
 database:
@@ -121,50 +190,147 @@ database:
     host: replica.internal
 ```
 
-환경변수는 `PYDCONFIG_DATABASE__PRIMARY__HOST`, `PYDCONFIG_DATABASE__REPLICA__HOST`다. `PYDCONFIG_PRIMARY_DB__HOST`는 등록 경로와 다르므로 자동 바인딩하지 않는다.
+Their environment variables are `PYDCONFIG_DATABASE__PRIMARY__HOST` and
+`PYDCONFIG_DATABASE__REPLICA__HOST`. `PYDCONFIG_PRIMARY_DB__HOST` does not
+refer to either path. Overrides and `explain()` use paths; `get()` uses
+names and requires the exact registered model type.
 
-이름과 경로 segment는 소문자로 시작하고 소문자·숫자·밑줄을 사용한다. segment 안의 `__`는 허용하지 않는다. 같은 이름, 같은 경로, 부모·자식으로 겹친 등록 경로, 최상단 `profile` 등록은 거부한다. 조회 시 모델 타입도 등록 타입과 정확히 일치해야 한다.
+Names and path segments start with a lowercase letter and use lowercase
+letters, digits, and underscores. A segment cannot contain `__`.
+Duplicate names, duplicate or overlapping paths, and registration under
+the reserved top-level `profile` key are rejected.
 
-`database.primary`만 등록한 경우 `database`는 구조를 위한 가상 ancestor다. 전체 JSON 환경변수는 `PYDCONFIG_DATABASE__PRIMARY`부터 사용할 수 있으며 `PYDCONFIG_DATABASE`는 구조 오류다.
+When only `database.primary` is registered, `database` is a structural
+ancestor, not a model section. Whole-model environment JSON can target
+`PYDCONFIG_DATABASE__PRIMARY`; targeting `PYDCONFIG_DATABASE` is a
+structural error.
 
-## Nested 모델과 기본값
+## YAML files
 
-모든 nested 설정 모델도 `ConfigModel`을 상속한다. 기본 child 설정은 모델 class를 factory로 지정한다.
+By default, the loader reads `root_dir/config.yaml`. If `root_dir` is
+omitted, it fixes the current working directory when constructed. Later
+working-directory changes do not move its root. Using a path based on
+`__file__`, as in the quickstart, makes file discovery independent of the
+application's launch directory.
+
+To require another file:
 
 ```python
-class DatabaseConfig(ConfigModel):
-    pool: PoolConfig = Field(default_factory=PoolConfig)
+loader = ConfigLoader(root_dir="config", yaml_file="settings.yml")
 ```
 
-loader는 이 선언을 child schema의 원시 기본값으로 펼친다. `PoolConfig()`를 미리 만들어 default로 넣지 않는다. child 기본값을 일부 바꾸려면 factory가 raw mapping을 반환하게 한다.
+Relative `yaml_file` paths are resolved under `root_dir`; absolute paths
+are used directly. The extension must be `.yaml` or `.yml`.
 
-```python
-class DatabaseConfig(ConfigModel):
-    pool: PoolConfig = Field(default_factory=lambda: {"size": 20})
+| File | Missing-file behavior |
+| --- | --- |
+| Default `config.yaml` | Optional; skipped if absent |
+| Explicit `yaml_file` | Required; absence raises `ConfigSourceError` |
+| Selected profile YAML | Optional unless `require_profile_yaml=True` |
+| `.env` and selected `.env.<profile>` | Optional |
+
+Automatic discovery does not also check `config.yml`. An existing optional
+file still fails if unreadable, malformed, or empty. Use `{}` for an
+intentionally empty YAML mapping. UTF-8 and UTF-8 with a BOM are accepted.
+
+YAML accepts one document with a root mapping, string keys, nested
+mappings, and lists of supported scalar values:
+
+```yaml
+database:
+  host: db.internal
+  port: 5432
+  pool:
+    size: 16
+    timeout: 2.5
+feature:
+  enabled: true
+  hosts:
+    - primary
+    - replica
 ```
 
-factory는 인자가 없는 함수로 작성한다. raw scalar·container 결과는 load당 한 번 수집하며 상위 source가 값을 덮어도 실행한다. 검증된 모델 인스턴스를 반환하는 factory와 이전 필드 데이터에 의존하는 factory는 지원하지 않는다. 파일 읽기, logger 변경, client 생성은 factory·validator 밖에서 수행한다.
+Duplicate keys, anchors, aliases, explicit tags such as `!!str`, merge
+keys such as `<<`, multiple documents, and non-string keys are rejected.
+Unknown final configuration paths also fail by default: a typo such as
+`database.hots` does not silently disappear.
 
-필수 nested 필드를 통째로 생략하면 child의 기본값만으로 부모를 자동 생성하지 않는다. parent 생성이 필요하면 위의 `Field(default_factory=...)`를 선언한다.
+`unknown="ignore"` removes unregistered final paths and reports them. It
+does not suppress parsing errors or permit unsupported structure. Use it
+when intentionally sharing a file with unregistered sections.
 
-## 환경변수 바인딩
+Implicit YAML values follow a restricted schema: lowercase `true` and
+`false` are booleans; `null`, `~`, and empty values are `None`. Decimal
+integers and finite floats are numeric. Values such as `0012`, `0x10`,
+`on`, `yes`, and dates remain strings. Quote text when necessary. A bool
+field still applies boolean parsing to a YAML string such as `TRUE`.
 
-기본 접두사는 `PYDCONFIG_`이며 경로의 점을 `__`로 바꾸고 대문자로 표기한다.
+Relative model fields of type `Path` are not automatically resolved under
+`root_dir`.
 
-| 설정 경로 | 기본 환경변수 |
+## Environment variables
+
+Direct binding does not require YAML placeholders. Names are derived from
+registered configuration paths, using the prefix `PYDCONFIG_`, uppercase
+segments, and `__` separators:
+
+| Configuration path | Environment name |
 | --- | --- |
 | `database.host` | `PYDCONFIG_DATABASE__HOST` |
+| `database.port` | `PYDCONFIG_DATABASE__PORT` |
 | `database.pool.size` | `PYDCONFIG_DATABASE__POOL__SIZE` |
 | `feature.enabled` | `PYDCONFIG_FEATURE__ENABLED` |
 | `feature.hosts` | `PYDCONFIG_FEATURE__HOSTS` |
 
-```python
-loader = ConfigLoader(root_dir="/path/to/config", env_prefix="MYAPP_")
+Override the quickstart's nested integer and boolean in Bash:
+
+```bash
+export PYDCONFIG_DATABASE__POOL__SIZE=40
+export PYDCONFIG_FEATURE__ENABLED=TRUE
+python app.py
 ```
 
-접두사를 바꿔도 프로파일 선택 변수는 `PYDCONFIG_PROFILE`이다. `MYAPP_PROFILE`로 바뀌지 않는다.
+Or in PowerShell:
 
-복합 값은 전체 JSON으로 전달한다.
+```powershell
+$env:PYDCONFIG_DATABASE__POOL__SIZE = '40'
+$env:PYDCONFIG_FEATURE__ENABLED = 'TRUE'
+python app.py
+```
+
+The output now includes `"pool_size": 40` and `"feature_enabled": true`.
+Other YAML values and defaults remain active. Remove these variables with
+`unset` in Bash or `Remove-Item Env:<name>` in PowerShell before running
+examples that assume no OS overrides.
+
+Tests can supply an environment mapping without changing process state:
+
+```python
+snapshot = loader.load(environ={
+    "PYDCONFIG_DATABASE__POOL__SIZE": "40",
+    "PYDCONFIG_FEATURE__ENABLED": "TRUE",
+})
+assert snapshot.get("database", DatabaseConfig).pool.size == 40
+assert snapshot.get("feature", FeatureConfig).enabled is True
+```
+
+`environ=None`, the default, reads a copy of `os.environ`. A supplied
+mapping replaces that OS source completely; it is not merged with process
+variables. `environ={}` excludes OS input but still reads YAML and dotenv.
+Values must be strings. The loader does not mutate the supplied mapping
+or `os.environ`.
+
+`env_prefix="MYAPP_"` changes the host name to `MYAPP_DATABASE__HOST`.
+`PYDCONFIG_PROFILE` remains the profile-control name regardless of prefix.
+
+On POSIX, only canonical uppercase names bind automatically. Windows OS
+names are handled without case sensitivity and conflicting names are
+rejected. Dotenv keys preserve their written case even on Windows; use
+uppercase names consistently.
+
+### JSON values and nested binding
+
+Use JSON for a list, dictionary, or complete model section:
 
 ```dotenv
 PYDCONFIG_DATABASE={"host":"db.internal","port":5432}
@@ -172,22 +338,114 @@ PYDCONFIG_DATABASE__POOL={"size":20,"timeout":1.5}
 PYDCONFIG_FEATURE__HOSTS=["primary","replica"]
 ```
 
-같은 source 안에서는 더 깊은 모델 JSON이 parent JSON을 덮고 scalar leaf가 마지막으로 적용된다. source가 다르면 source 우선순위가 먼저다. 따라서 OS의 parent JSON은 `.env`의 leaf보다 우선한다. container 원소를 `HOSTS__0`처럼 바꾸는 경로는 지원하지 않으며 전체 list를 교체한다.
+Within one source, deeper model JSON overrides parent JSON and scalar
+leaves apply last:
 
-POSIX에서는 정규 대문자 이름만 자동 바인딩한다. Windows OS 환경은 대소문자 비구분으로 처리하며 충돌하는 이름은 오류다. dotenv key는 Windows에서도 파일에 쓰인 대소문자를 보존한다.
+```python
+snapshot = loader.load(environ={
+    "PYDCONFIG_DATABASE": '{"host":"db.internal","pool":{"size":20}}',
+    "PYDCONFIG_DATABASE__POOL": '{"size":24,"timeout":1.5}',
+    "PYDCONFIG_DATABASE__POOL__SIZE": "32",
+})
+database = snapshot.get("database", DatabaseConfig)
+assert database.host == "db.internal"
+assert database.pool.size == 32
+assert database.pool.timeout == 1.5
+```
 
-## 프로파일과 dotenv
+Across sources, source precedence applies first: OS parent JSON can
+override a dotenv leaf. Lists are replaced as a whole;
+`PYDCONFIG_FEATURE__HOSTS__0` cannot update one item. Dynamic dictionary
+keys also belong inside JSON, not extra `__` segments.
 
-프로파일 선택은 다음 순서다.
+Python literal syntax, duplicate keys, and NaN/Infinity are rejected.
+Container fields need a JSON array or object; nullable containers can
+accept JSON `null`.
+
+## Dotenv files
+
+The loader reads `.env` and the selected `.env.<profile>` under `root_dir`.
+It does not search parent directories or load `.env.example` automatically.
+For the quickstart, add `config/.env`:
+
+```dotenv
+PYDCONFIG_DATABASE__POOL__SIZE=24
+PYDCONFIG_FEATURE__ENABLED=TRUE
+PYDCONFIG_FEATURE__HOSTS=["primary","replica"]
+```
+
+Without OS overrides, the pool size becomes `24` and the flag becomes
+`true`. Dotenv direct binding outranks both base and profile YAML; OS
+variables outrank dotenv.
+
+Files follow python-dotenv syntax with internal variable expansion
+disabled. `A=${B}` stores literal `${B}`. Duplicate keys, malformed lines,
+and a bare `FLAG` fail loading. `FLAG=` is a defined empty string, which
+a boolean field rejects.
+
+`dotenv=False` skips both dotenv files and the base dotenv profile
+candidate. OS binding and YAML profile selection still work. Calling
+`load_dotenv()` separately would make its loaded values part of the OS
+source, changing how their priority and origin are represented.
+
+## Profiles
+
+A profile selects one YAML variant and one dotenv variant:
+
+```text
+config/
+  config.yaml
+  config.local.yaml
+  .env
+  .env.local
+```
+
+Add `profile: local` as a top-level key in the quickstart's base YAML.
+Create `config.local.yaml` with partial overrides:
+
+```yaml
+database:
+  host: local-db.internal
+  pool:
+    timeout: 2.5
+```
+
+Keep `.env` from the previous section and add `.env.local`:
+
+```dotenv
+PYDCONFIG_DATABASE__POOL__SIZE=32
+PYDCONFIG_FEATURE__ENABLED='"False"'
+```
+
+With no matching OS variables, the result is:
+
+| Field | Value | Source |
+| --- | --- | --- |
+| `snapshot.profile` | `local` | Base YAML profile declaration |
+| `database.host` | `local-db.internal` | Profile YAML |
+| `database.port` | `5432` | Base YAML |
+| `database.pool.size` | `32` | Profile dotenv |
+| `database.pool.timeout` | `2.5` | Profile YAML |
+| `feature.enabled` | `False` | Profile dotenv, after one quote pair is removed |
+| `feature.hosts` | `["primary", "replica"]` | Base dotenv |
+
+OS `PYDCONFIG_DATABASE__POOL__SIZE=40` overrides `32`. Explicit
+`overrides={"database": {"pool": {"size": 48}}}` overrides even that OS
+value. The [bundled example](../examples/basic/README.md) includes a
+complete file set and runs with an explicitly empty OS environment.
+
+Profile selection follows this order:
 
 ```text
 load(profile=...) > OS PYDCONFIG_PROFILE > .env PYDCONFIG_PROFILE
-                  > 기본 YAML의 profile > 선택 없음
+                  > base YAML profile > no profile
 ```
+
+Limit accepted profiles and select one explicitly:
 
 ```python
 loader = ConfigLoader(
-    root_dir="/path/to/config",
+    root_dir="config",
     allowed_profiles=["local", "test", "stg", "prd"],
 )
 loader.register("database", DatabaseConfig)
@@ -196,21 +454,23 @@ snapshot = loader.load(profile="test")
 assert snapshot.profile == "test"
 ```
 
-`test`를 선택하면 `config.yaml`과 `config.test.yaml`, `.env`와 `.env.test`를 누적 적용한다. `.env.local`은 함께 읽지 않는다. 기본 `.env`의 `PYDCONFIG_PROFILE=local`을 명시적 `test`가 덮어도 `.env`의 다른 값은 기본 source로 남는다.
+Selecting `test` reads the base files plus `config.test.yaml` and
+`.env.test`, without reading `local` variants. Other values in the base
+dotenv remain active even if its profile declaration is overridden.
 
-프로파일은 소문자로 시작하고 소문자·숫자·밑줄·하이픈을 허용한다. 빈 문자열은 선택 없음이 아니라 오류다. 우선순위가 낮은 profile 선언도 타입·문법이 잘못되면 오류다. profile YAML의 `profile`, profile dotenv의 `PYDCONFIG_PROFILE`은 같은 값이더라도 재선언할 수 없다. `${ENVIRONMENT}`로 profile을 보간하지 않는다.
+Profile names start with a lowercase letter and allow lowercase letters,
+digits, underscores, and hyphens. Empty or invalid declarations are
+errors, including lower-priority declarations. Profile YAML and profile
+dotenv cannot redeclare the profile. Profiles are literal names, not
+`${VAR}` expressions.
 
-```python
-loader = ConfigLoader(root_dir="/etc/app", dotenv=False)
-```
+`require_profile_yaml=True` requires a selected profile and its YAML
+variant. For `yaml_file="settings.yml"`, that variant is
+`settings.<profile>.yml`; dotenv files remain under `root_dir`.
 
-`dotenv=False`는 기본·profile dotenv 읽기와 기본 `.env`의 profile 후보를 모두 끈다. OS 또는 YAML의 profile 선택은 유지한다. production에서 dotenv 파일을 사용하지 않는 구성에 적합하다.
+## Environment references in YAML
 
-`require_profile_yaml=True`는 선택한 profile의 YAML 존재를 요구한다. profile이 미선택이면 오류이므로 dotenv-only 배포에서 이 옵션을 켜지 않는다.
-
-## YAML의 환경변수 참조
-
-placeholder는 YAML 구조를 파싱한 뒤 **최종 사용되는 문자열 값**에만 적용한다. `.env < .env.<profile> < OS` 순서로 참조 환경값을 찾는다. 자동 바인딩 접두사 밖의 `DB_HOST` 같은 변수도 참조할 수 있다.
+YAML can reference ordinary environment names without the binding prefix:
 
 ```yaml
 database:
@@ -220,28 +480,55 @@ feature:
   hosts: '${APP_HOSTS:-["primary"]}'
 ```
 
-| 문법 | 동작 |
+| Expression | Behavior |
 | --- | --- |
-| `${VAR}` | 미정의면 오류, 정의된 빈 값은 빈 문자열 |
-| `${VAR:-fallback}` | 미정의 또는 빈 값이면 literal fallback |
-| `$${VAR}` | 결과에 `${VAR}`를 그대로 남김 |
-| `prefix-${VAR}-suffix` | 문자열 일부를 대체 |
+| `${VAR}` | Error if undefined; a defined empty value stays empty |
+| `${VAR:-fallback}` | Literal fallback if undefined or empty |
+| `$${VAR}` | Produces literal `${VAR}` |
+| `prefix-${VAR}-suffix` | Replaces part of a string |
 
-fallback에는 `}`나 중첩 placeholder를 넣을 수 없다. `${VAR-default}`와 `${VAR:default}`는 지원하지 않는다. YAML key는 보간하지 않는다.
+Reference lookup uses base dotenv, profile dotenv, then the OS or supplied
+environment mapping; later sources win. Numeric fields validate resulting
+strings, and container fields can parse resulting JSON. Inserted text is
+never reparsed as YAML structure.
 
-OS의 직접 override로 가려진 `${MISSING}`은 평가하지 않는다. `unknown="ignore"`로 제거한 영역의 placeholder도 평가하지 않는다. 다만 읽은 YAML의 문법·중복 key 오류는 source 단계에서 실패한다.
+Interpolation runs after merging and unknown-field pruning, only on final
+YAML strings still in use. An OS direct override can hide `${MISSING}` so
+it is never evaluated. YAML syntax and duplicate-key errors still fail
+even if later values would hide them.
 
-dotenv의 `A=${B}`는 literal이다. YAML `${A}`에 삽입해도 `${B}`를 다시 확장하지 않는다. `load_dotenv()`를 별도로 호출해 전역 환경을 바꾸면 source 간 구분이 달라지므로 loader에 dotenv 읽기를 맡긴다.
+There is one interpolation pass. If dotenv defines `A=${B}`, YAML `${A}`
+produces literal `${B}`. YAML keys, Python overrides, and dotenv values are
+not independently interpolated. Fallbacks cannot contain `}` or nested
+placeholders. `${VAR-default}` and `${VAR:default}` are unsupported.
 
-## Boolean과 quote
+## Booleans and quotes
 
-boolean은 실제 bool, 정수 0/1, 문자열 `true/false/1/0`을 지원한다. 문자열은 대소문자를 구분하지 않고 앞뒤 ASCII 공백을 제거한다. `yes/no/on/off`, 빈 문자열과 알 수 없는 token은 오류다.
+Bool fields accept actual booleans, integer `0` or `1`, and strings
+`true`, `false`, `1`, or `0`, ignoring case and surrounding ASCII
+whitespace. `yes`, `no`, `on`, `off`, empty strings, and unknown tokens
+are rejected.
 
-bool·숫자·JSON 환경 입력은 짝이 맞는 ASCII quote 한 쌍을 한 번 제거한다. 문자열·`SecretStr`·Path·URL·string Enum·string Literal은 기본 보존한다. 문자열의 quote도 제거하려면 필드 **경로**로 지정한다.
+One matching pair of outer ASCII quotes is removed from boolean, numeric,
+and JSON environment input. Literal quotes in strings, `SecretStr`, paths,
+URLs, string enums, and string literals are preserved by default.
+
+Shell syntax quotes and characters inside a value differ. In Bash:
+
+```bash
+export PYDCONFIG_FEATURE__ENABLED="False"
+export PYDCONFIG_FEATURE__ENABLED='"False"'
+```
+
+The first command supplies `False`; the second supplies `"False"` with
+actual quote characters. Both parse as false under the default policy.
+Nested quote pairs are not repeatedly removed.
+
+Set policies by configuration path:
 
 ```python
 loader = ConfigLoader(
-    root_dir="/path/to/config",
+    root_dir="config",
     env_quote_policy={
         "database.host": "unwrap",
         "feature.enabled": "preserve",
@@ -249,44 +536,103 @@ loader = ConfigLoader(
 )
 ```
 
-위 설정의 `feature.enabled`에 실제 `"False"`가 들어오면 오류다. `preserve`가 wrapper 제거를 껐기 때문이다. shell의 `export FLAG="False"`는 구문상의 quote가 제거되어 실제 값이 `False`다. `export FLAG='"False"'`는 실제 quote가 남는 다른 입력이다.
+Actual `"False"` now fails for `feature.enabled`, because `preserve`
+disables wrapper removal. Unmatched quotes, interior quotes, and
+backslashes are not repaired or shell-parsed. Explicit string `unwrap`
+removes matching first and last quotes without trimming the string.
+Policies use paths, not registration names. A model or container policy
+applies to its whole JSON wrapper, not recursively to its elements.
 
-맞지 않는 quote, 단일 quote 한 글자, 내부 quote와 backslash는 임의로 수정하지 않는다. 중첩 quote를 반복 제거하지 않는다. 전체·부분 placeholder와 빈 값·fallback의 차이는 [quote 규칙](configuration-reference.md#boolean과-quote)을 확인한다.
+Fallback's undefined/empty check precedes quote removal. Actual `""`
+characters are nonempty, whereas dotenv `FLAG=""` parses as an empty
+string. A fallback is YAML literal input, not environment input subject
+to wrapper removal.
 
-## Snapshot 조회와 변경
+## Source precedence and explicit overrides
 
-`load()`는 모든 등록 모델 검증에 성공한 경우에만 snapshot을 반환한다. `get()`은 등록 이름과 타입을 받고 깊은 복사본을 돌려준다. 조회가 validator와 factory를 다시 실행하지 않는다.
+Sources apply in increasing priority:
+
+```text
+model defaults < base YAML < profile YAML < .env < .env.<profile>
+               < OS environment < explicit overrides
+```
+
+Overrides have the same mapping structure as the YAML root:
 
 ```python
-database = snapshot.get("database", DatabaseConfig)
-changed = snapshot.with_overrides({"database": {"pool": {"size": 12}}})
+snapshot = loader.load(
+    environ={"PYDCONFIG_DATABASE__POOL__SIZE": "40"},
+    overrides={"database": {"pool": {"size": 48}}},
+)
+assert snapshot.get("database", DatabaseConfig).pool.size == 48
+```
 
+Overrides are Python input: they are validated without environment quote
+removal or YAML interpolation. They cannot change the selected profile.
+
+## Snapshots and reloads
+
+`get(name, model)` returns a deep copy of a validated model without rerunning
+factories or validators. Model fields are frozen, but Python lists and
+dictionaries on a retrieved copy remain mutable without changing the
+snapshot or another `get()` result.
+
+Create a new snapshot from saved input:
+
+```python
+original = loader.load(environ={}, overrides={
+    "database": {"pool": {"size": 48}},
+})
+changed = original.with_overrides({"database": {"pool": {"size": 12}}})
+assert original.get("database", DatabaseConfig).pool.size == 48
 assert changed.get("database", DatabaseConfig).pool.size == 12
-# snapshot의 설정은 그대로 유지한다.
 ```
 
-`with_overrides()`는 보관된 검증 전 입력에 새 Python 값을 합쳐 재검증한다. 파일·환경변수를 다시 읽거나 기존 입력의 quote를 다시 제거하지 않는다. 새 override 문자열은 YAML 보간 대상이 아니다. profile 변경은 이 API로 할 수 없다.
+`with_overrides()` merges new Python input into saved pre-validation input
+and validates again. It does not reread files or environment variables,
+reinterpret old quoting, or interpolate new strings. Call `loader.load()`
+again to read changed external configuration.
 
-파일 또는 환경 변경을 읽으려면 `loader.load()`를 다시 호출한다. 서비스가 새 snapshot을 쓰게 하는 전환은 애플리케이션에서 수행한다. 설정 client를 자동으로 다시 만들거나 기존 연결을 종료하지 않는다.
+Applications decide when to switch snapshots and recreate clients. The
+library does not watch files, switch service instances, or close existing
+connections automatically.
 
-## 출처와 오류 진단
+## Diagnostics and errors
+
+Inspect a field's origin without dumping its value:
 
 ```python
-explanation = snapshot.explain("database.pool.size")
-report = snapshot.source_report()
+from dataclasses import asdict
+
+explanation = asdict(snapshot.explain("database.pool.size"))
+report = asdict(snapshot.source_report())
+assert explanation["output"] == "opaque-validation"
 ```
 
-`explain()`은 값 없이 입력을 정의한 source, placeholder 참조 source, 가려진 source, null 장벽과 schema 기본값 fallback을 설명한다. 임의 validator가 만든 최종 출력의 데이터 의존관계까지 추적하지 않는다. `source_report()`는 읽음·부재로 생략·비활성 파일과 무시한 경로 등을 보고한다. 두 반환 객체는 frozen dataclass이며 `dataclasses.asdict()`로 값 없는 진단 mapping을 만들 수 있다. [진단 객체 reference](configuration-reference.md#오류와-진단)
+`explain()` describes input sources, referenced environment sources,
+shadowed input, and default fallback steps. It does not infer arbitrary
+validators' output dependencies. `source_report()` lists loaded, missing,
+or disabled files, ignored paths, and noncanonical variables. Both return
+immutable dataclasses without configuration values.
 
-| 문제 | 확인할 사항 |
+| Symptom | Check |
 | --- | --- |
-| 환경변수가 반영되지 않음 | name 대신 path를 사용했는지, prefix와 `__`·대문자가 맞는지, `environ={}`로 OS를 제외했는지 |
-| profile 파일이 읽히지 않음 | 실제 선택 profile, loader 생성 시 `root_dir`, 파일 variant 이름, source report의 skipped 상태 |
-| bool을 읽지 못함 | 허용 token인지, 실제 quote가 몇 겹인지, 해당 path의 preserve 정책 |
-| 문자열에 quote가 남음 | 기본 보존 정책인지, shell·dotenv 구문 quote와 실제 문자 quote를 구분했는지 |
-| `${VAR}` 오류 | 최종 사용되는 YAML 값인지, 변수명이 정의되었는지, fallback이 필요한지 |
-| unknown 오류 | 등록 경로·필드 오타 또는 의도하지 않은 접두사 변수인지 |
-| source 오류 | UTF-8, duplicate key, 허용 YAML subset, JSON 문법과 크기·깊이 제한 |
-| 조회 타입 오류 | `get()`의 이름과 모델 타입이 등록 내용과 정확히 일치하는지 |
+| Environment override has no effect | Path, prefix, uppercase spelling, `__`, and whether `environ={}` excludes OS input |
+| Profile file is not reflected | Selected profile, root directory, YAML variant name, and source report |
+| Boolean parsing fails | Accepted token, actual quotes, and the path's policy |
+| Quotes remain in a string | Default preservation and shell syntax versus literal characters |
+| `${VAR}` raises an error | Whether the final YAML value uses it and the variable is defined |
+| Unknown field raises an error | Registration path, field spelling, and unexpected prefixed variables |
+| Source parsing fails | UTF-8, duplicate keys, YAML subset, JSON syntax, and input limits |
+| `get()` fails | Registration name and exact model type |
 
-오류 계약은 [오류 reference](configuration-reference.md#오류와-진단)에 정리했다. 오류를 조사할 때 환경 전체나 모델 전체를 출력하지 않는다. `SecretStr`도 애플리케이션이 원문을 꺼내 출력하면 보호되지 않는다.
+Exceptions derive from `ConfigError`: `ConfigRegistrationError`,
+`ConfigSourceError`, `ConfigProfileError`, `ConfigInterpolationError`,
+`ConfigValidationError`, and `ConfigLookupError`. They provide reason
+codes, paths, and available source locations instead of raw inputs or
+arbitrary validator messages. See the
+[error reference](configuration-reference.md#오류와-진단) for details.
+
+Avoid printing complete environment mappings or models while diagnosing
+failures. Applications can still expose values by explicitly serializing
+retrieved models or revealing a `SecretStr` value.

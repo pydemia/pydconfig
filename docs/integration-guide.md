@@ -1,6 +1,6 @@
 # 애플리케이션 연동
 
-pydconfig 1.0.0을 application bootstrap과 FastAPI lifespan에 연결하는 예제다. FastAPI는 선택 의존성이므로 사용하려는 application에 별도로 설치한다. 설정 모델·source 규칙은 [사용자 가이드](user-guide.md), 필드·오류 계약은 [설정 규칙](configuration-reference.md)을 따른다.
+pydconfig 1.0.1을 application bootstrap과 FastAPI lifespan에 연결하는 예제다. FastAPI는 선택 의존성이므로 사용하려는 application에 별도로 설치한다. 설정 모델·source 규칙은 [사용자 가이드](user-guide.md), 필드·오류 계약은 [설정 규칙](configuration-reference.md)을 따른다.
 
 ## 생성자 주입
 

@@ -19,7 +19,7 @@ def main() -> None:
     installed = Path(pydconfig.__file__).resolve()
     if installed.is_relative_to(checkout / "src"):
         raise AssertionError("verification requires an installed wheel, not an editable checkout")
-    assert metadata.version("pydconfig") == pydconfig.__version__ == "1.0.0"
+    assert metadata.version("pydconfig") == pydconfig.__version__ == "1.0.1"
     assert installed.with_name("py.typed").is_file()
     expected = {
         "profile": "local",
