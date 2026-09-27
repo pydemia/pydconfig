@@ -23,13 +23,13 @@ def test_environment_budget_counts_all_sources(tmp_path, monkeypatch):
         a: str = ""
         b: str = ""
 
-    (tmp_path / ".env").write_text("PYDCONFIG_APP__A=" + "a" * 20)
-    (tmp_path / ".env.test").write_text("PYDCONFIG_APP__B=" + "b" * 20)
-    monkeypatch.setattr("pydconfig.binding.MAX_FILE", 100)
+    (tmp_path / ".env").write_text("APP__A=" + "a" * 20)
+    (tmp_path / ".env.test").write_text("APP__B=" + "b" * 20)
+    monkeypatch.setattr("pydconfig.binding.MAX_FILE", 75)
     loader = ConfigLoader(root_dir=tmp_path)
     loader.register("app", App)
     with pytest.raises(ConfigSourceError, match="environment-limit"):
-        loader.load(profile="test", environ={"PYDCONFIG_APP__A": "c" * 20})
+        loader.load(profile="test", environ={"APP__A": "c" * 20})
 
 
 @pytest.mark.parametrize("template,value", [("${RAW}", "v" * 101), ("${RAW}${RAW}", "v" * 60)])
@@ -74,4 +74,4 @@ def test_pretty_repr_does_not_evaluate_computed_fields(tmp_path):
 def test_windows_environment_case_collision(loader, monkeypatch):
     monkeypatch.setattr("pydconfig.binding.os.name", "nt")
     with pytest.raises(ConfigSourceError, match="environment-name-collision"):
-        loader.load(environ={"PYDCONFIG_DATABASE__HOST": "one", "pydconfig_database__host": "two"})
+        loader.load(environ={"DATABASE__HOST": "one", "database__host": "two"})

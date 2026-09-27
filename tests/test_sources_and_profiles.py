@@ -20,12 +20,12 @@ def test_source_precedence(loader, tmp_path, stage, expected):
     files = [
         ("config.yaml", "database:\n  pool:\n    size: 11\n"),
         ("config.test.yaml", "database:\n  pool:\n    size: 12\n"),
-        (".env", "PYDCONFIG_DATABASE__POOL__SIZE=13\n"),
-        (".env.test", "PYDCONFIG_DATABASE__POOL__SIZE=14\n"),
+        (".env", "DATABASE__POOL__SIZE=13\n"),
+        (".env.test", "DATABASE__POOL__SIZE=14\n"),
     ]
     for name, content in files[:stage]:
         (tmp_path / name).write_text(content)
-    env = {"PYDCONFIG_DATABASE__POOL__SIZE": "15"} if stage >= 5 else {}
+    env = {"DATABASE__POOL__SIZE": "15"} if stage >= 5 else {}
     overrides = {"database": {"pool": {"size": 16}}} if stage == 6 else None
     result = loader.load(profile="test", environ=env, overrides=overrides)
     assert result.get("database", Database).pool.size == expected
@@ -206,7 +206,7 @@ def test_shadowed_missing_and_ignored_subtree(tmp_path):
     )
     loader = ConfigLoader(root_dir=tmp_path, unknown="ignore")
     loader.register("database", Database)
-    result = loader.load(environ={"PYDCONFIG_DATABASE__HOST": "winner"})
+    result = loader.load(environ={"DATABASE__HOST": "winner"})
     assert result.get("database", Database).host == "winner"
     assert result.source_report().ignored_paths == ("unused",)
 
@@ -247,7 +247,7 @@ def test_file_limits_encoding(loader, tmp_path, filename, content):
 
 def test_utf8_bom(loader, tmp_path):
     (tmp_path / "config.yaml").write_bytes(b"\xef\xbb\xbffeature:\n  enabled: true\n")
-    (tmp_path / ".env").write_bytes(b"\xef\xbb\xbfPYDCONFIG_DATABASE__PORT=5000\n")
+    (tmp_path / ".env").write_bytes(b"\xef\xbb\xbfDATABASE__PORT=5000\n")
     result = loader.load(environ={})
     assert result.get("feature", Feature).enabled
     assert result.get("database", Database).port == 5000

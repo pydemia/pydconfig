@@ -79,7 +79,7 @@ class ConfigSnapshot:
         models, resolution = validate_settings(
             self._root,
             self._registrations,
-            lambda: replay_input(self._resolution, self._options, self._root, values),
+            lambda _delimiter: replay_input(self._resolution, self._options, self._root, values),
         )
         return ConfigSnapshot(self._registrations, self._root, self._options, resolution, models)
 

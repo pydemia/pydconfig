@@ -28,7 +28,7 @@ class RedactedInput(dict[str, Any]):
 
 @dataclass(repr=False)
 class LoadContext:
-    resolve: Callable[[], Resolution]
+    resolve: Callable[[str], Resolution]
     resolution: Resolution | None = None
 
     def __repr__(self) -> str:
@@ -45,7 +45,10 @@ class PydConfigSource(PydanticBaseSettingsSource):
         return None, field_name, False
 
     def __call__(self) -> dict[str, Any]:
-        self.context.resolution = self.context.resolve()
+        # Keep source precedence and provenance while using the settings delimiter.
+        delimiter = self.config.get("env_nested_delimiter")
+        assert delimiter is not None
+        self.context.resolution = self.context.resolve(delimiter)
         return RedactedInput(deepcopy(raw(self.context.resolution.node)))
 
     def __repr__(self) -> str:
@@ -58,6 +61,7 @@ class AggregateBase(BaseSettings):
         frozen=True,
         validate_default=True,
         arbitrary_types_allowed=False,
+        env_nested_delimiter="__",
         env_file=None,
         secrets_dir=None,
         cli_parse_args=None,
@@ -70,7 +74,7 @@ class GroupBase(BaseModel):
 
 
 def validate_settings(
-    root: Plan, registrations: tuple[Registration, ...], resolve: Callable[[], Resolution]
+    root: Plan, registrations: tuple[Registration, ...], resolve: Callable[[str], Resolution]
 ) -> tuple[dict[str, ConfigModel], Resolution]:
     def group_type(plan: Plan, aggregate: bool = False) -> type[BaseModel]:
         fields: dict[str, Any] = {

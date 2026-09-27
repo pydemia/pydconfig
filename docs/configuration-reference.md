@@ -1,6 +1,9 @@
 # 설정 규칙
 
-pydconfig 1.0.1의 공개 API와 입력 처리 규칙이다. 코드 예제의 기반 모델 선언은 [사용자 가이드](user-guide.md)에 있다.
+현재 개발 checkout의 공개 API와 입력 처리 규칙이다. 기본 접두사를 제거한
+변경은 아직 PyPI에 배포하지 않았다. PyPI 1.0.1에서 아래 환경변수 예제를
+실행하려면 `env_prefix=""`를 명시한다. 코드 예제의 기반 모델 선언은
+[사용자 가이드](user-guide.md)에 있다.
 
 ## ConfigLoader 옵션
 
@@ -10,7 +13,7 @@ pydconfig 1.0.1의 공개 API와 입력 처리 규칙이다. 코드 예제의 �
 ConfigLoader(
     root_dir=None,
     yaml_file=None,
-    env_prefix="PYDCONFIG_",
+    env_prefix="",
     dotenv=True,
     allowed_profiles=None,
     require_profile_yaml=False,
@@ -23,7 +26,7 @@ ConfigLoader(
 | --- | --- |
 | `root_dir` | `str` 또는 `Path`. 생략하면 loader 생성 시 cwd를 절대 경로로 고정한다. |
 | `yaml_file` | 명시적 `.yaml`·`.yml` 경로. 상대경로는 root_dir 기준이다. 생략하면 `config.yaml`만 자동 탐색한다. |
-| `env_prefix` | 비어 있거나 `[A-Z][A-Z0-9_]*_` 형태. 기본 `PYDCONFIG_`. |
+| `env_prefix` | 비어 있거나 `[A-Z][A-Z0-9_]*_` 형태. 기본 `""`. 접두사 없이 등록 경로에서 환경변수명을 만든다. |
 | `dotenv` | False이면 `.env`·profile dotenv 읽기와 dotenv profile 후보를 제외한다. |
 | `allowed_profiles` | 허용 profile 문자열 목록. 목록 밖 profile은 오류다. |
 | `require_profile_yaml` | True이면 선택 profile과 그 YAML variant의 존재가 필수다. |
@@ -91,6 +94,24 @@ profile 문법은 `[a-z][a-z0-9_-]*`다. 선택 우선순위는 명시적 load �
 자동 탐색은 `config.yml`을 추가 탐색하지 않는다. 존재하는 optional 파일의 읽기·encoding·문법 오류는 실패한다. UTF-8과 UTF-8 BOM을 허용한다. 파일별로 한 번 읽으며 여러 파일이 같은 시점의 filesystem snapshot이라는 보장은 없다.
 
 profile은 string literal이어야 하며 보간하지 않는다. profile 전용 YAML·dotenv에서는 profile 재선언을 거부한다. `PYDCONFIG_PROFILE`은 env_prefix와 독립된 예약 제어 변수다.
+
+## 환경변수 경로와 nested delimiter
+
+기본 환경변수명은 `DATABASE__HOST`처럼 접두사 없이 쓴다. aggregate
+`BaseSettings`의 `SettingsConfigDict(env_nested_delimiter="__")` 설정을
+custom source가 읽어 OS 환경과 dotenv의 nested 경로를 분리한다.
+
+`__`는 연속된 underscore 두 개이며 nested level의 구분자다.
+`DATABASE__POOL__SIZE`는 `database.pool.size`에 대응한다. underscore 한
+개는 이름의 일부이므로 `DATABASE__POOL_SIZE`는 `database.pool_size`에
+대응하고 `APP_SETTINGS__API_KEY`는 `app_settings.api_key`에 대응한다.
+`ConfigModel`에 delimiter를 따로 지정할 필요는 없다.
+
+접두사가 비어 있으면 첫 segment가 등록된 root인 변수만 바인딩한다. `PATH`
+등 무관한 변수는 무시하고 `DATABASE__TYPO` 같은 등록 root 아래의 알 수
+없는 경로에는 `unknown` 정책을 적용한다. 1.0.1까지 사용하던 이름을 유지하려면
+`env_prefix="PYDCONFIG_"`를 명시한다. `PYDCONFIG_PROFILE`은 접두사와
+독립된 예약 제어 변수이며 nested 필드명으로 처리하지 않는다.
 
 ## Boolean과 quote
 

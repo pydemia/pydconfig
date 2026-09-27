@@ -112,8 +112,8 @@ def test_same_type_multiple_registrations(tmp_path):
     loader.register("replica_db", Database, path="database.replica")
     result = loader.load(
         environ={
-            "PYDCONFIG_DATABASE__PRIMARY__HOST": "primary",
-            "PYDCONFIG_DATABASE__REPLICA__HOST": "replica",
+            "DATABASE__PRIMARY__HOST": "primary",
+            "DATABASE__REPLICA__HOST": "replica",
         }
     )
     assert result.get("primary_db", Database).host == "primary"
@@ -148,7 +148,7 @@ def test_factories_once_even_shadowed_and_not_on_get_replay(tmp_path):
 
     loader = ConfigLoader(root_dir=tmp_path)
     loader.register("app", App)
-    result = loader.load(environ={"PYDCONFIG_APP__VALUES": '["env"]'})
+    result = loader.load(environ={"APP__VALUES": '["env"]'})
     assert calls == ["factory"]
     result.get("app", App)
     assert result.with_overrides({"app": {"values": ["override"]}}).get("app", App).values == [
@@ -187,12 +187,12 @@ def test_supported_types_and_constraints(tmp_path):
     loader = ConfigLoader(root_dir=tmp_path)
     loader.register("app", App)
     env = {
-        "PYDCONFIG_APP__URL": "https://example.com",
-        "PYDCONFIG_APP__PATH": "./data",
-        "PYDCONFIG_APP__MODE": "test",
-        "PYDCONFIG_APP__LITERAL": '"1"',
-        "PYDCONFIG_APP__BOOLEAN": "TRUE",
-        "PYDCONFIG_APP__VALUES": '["FALSE", "TRUE"]',
+        "APP__URL": "https://example.com",
+        "APP__PATH": "./data",
+        "APP__MODE": "test",
+        "APP__LITERAL": '"1"',
+        "APP__BOOLEAN": "TRUE",
+        "APP__VALUES": '["FALSE", "TRUE"]',
     }
     result = loader.load(environ=env).get("app", App)
     assert result.mode is Mode.test and result.literal == 1 and result.boolean is True
@@ -209,7 +209,7 @@ def test_invalid_default_scalar_can_be_shadowed(tmp_path):
     loader.register("app", App)
     with pytest.raises(ConfigValidationError):
         loader.load(environ={})
-    assert loader.load(environ={"PYDCONFIG_APP__VALUE": "3"}).get("app", App).value == 3
+    assert loader.load(environ={"APP__VALUE": "3"}).get("app", App).value == 3
 
 
 def test_multihost_dsn_and_typed_default(tmp_path):
@@ -222,7 +222,7 @@ def test_multihost_dsn_and_typed_default(tmp_path):
     loader.register("app", App)
     result = loader.load(environ={}).get("app", App)
     assert result.dsn.hosts()[1]["host"] == "replica"
-    result = loader.load(environ={"PYDCONFIG_APP__DSN": "postgresql://localhost/app"}).get(
+    result = loader.load(environ={"APP__DSN": "postgresql://localhost/app"}).get(
         "app", App
     )
     assert result.dsn.hosts()[0]["host"] == "localhost"

@@ -32,6 +32,7 @@ def bind(
     refs: Mapping[str, SourceRef],
     *,
     prefix: str,
+    delimiter: str,
     plans: Mapping[tuple[str, ...], Plan],
     root: Plan,
     policies: Mapping[str, str],
@@ -48,7 +49,7 @@ def bind(
         if prefix and not canonical.startswith(prefix):
             continue
         remainder = canonical[len(prefix) :]
-        parts = tuple(part.lower() for part in remainder.split("__"))
+        parts = tuple(part.lower() for part in remainder.split(delimiter))
         if not prefix and (not parts or parts[0] not in root.fields):
             continue
         ref = refs.get(name, SourceRef(kind, name))

@@ -76,7 +76,7 @@ def test_replay_prevalidation_input_without_sources_or_factories(tmp_path, monke
 
 
 def test_native_sources_and_cli_excluded(loader, monkeypatch):
-    monkeypatch.setenv("PYDCONFIG_FEATURE__ENABLED", "TRUE")
+    monkeypatch.setenv("FEATURE__ENABLED", "TRUE")
     monkeypatch.setattr(sys, "argv", ["program", "--feature.enabled", "true"])
     sources = []
     original = PydConfigSource.__call__
@@ -97,7 +97,7 @@ def test_environment_and_logger_unchanged(loader):
     before_env = dict(os.environ)
     logger = logging.getLogger("pydantic_settings")
     before_logging = logger.level, tuple(logger.handlers)
-    loader.load(environ={"PYDCONFIG_FEATURE__ENABLED": "TRUE"})
+    loader.load(environ={"FEATURE__ENABLED": "TRUE"})
     assert dict(os.environ) == before_env
     assert (logger.level, tuple(logger.handlers)) == before_logging
 
@@ -108,7 +108,7 @@ def test_concurrent_independent_contexts(tmp_path):
 
     def load(index):
         result = loader.load(
-            profile=f"test-{index}", environ={"PYDCONFIG_DATABASE__PORT": str(5000 + index)}
+            profile=f"test-{index}", environ={"DATABASE__PORT": str(5000 + index)}
         )
         return result.profile, result.get("database", Database).port
 
@@ -171,7 +171,7 @@ def test_source_error_sanitizing(loader, tmp_path, source, text):
     elif source == "dotenv":
         (tmp_path / ".env").write_text(text)
     else:
-        env["PYDCONFIG_DATABASE"] = text
+        env["DATABASE"] = text
     with pytest.raises(ConfigError) as caught:
         loader.load(environ=env)
     error = caught.value
@@ -191,7 +191,7 @@ def test_validator_and_factory_messages_do_not_escape(tmp_path):
     loader = ConfigLoader(root_dir=tmp_path)
     loader.register("app", App)
     with pytest.raises(ConfigValidationError) as caught:
-        loader.load(environ={"PYDCONFIG_APP__VALUE": SENTINEL})
+        loader.load(environ={"APP__VALUE": SENTINEL})
     assert SENTINEL not in repr(caught.value.issues) + str(caught.value)
     assert caught.value.__context__ is None
 
@@ -211,7 +211,7 @@ def test_validator_and_factory_messages_do_not_escape(tmp_path):
 def test_settings_debug_has_no_raw_secret(loader, monkeypatch, caplog):
     monkeypatch.setenv("PYDANTIC_SETTINGS_DEBUG", "1")
     with caplog.at_level(logging.DEBUG, logger="pydantic_settings"):
-        result = loader.load(environ={"PYDCONFIG_DATABASE__HOST": SENTINEL})
+        result = loader.load(environ={"DATABASE__HOST": SENTINEL})
     assert "Resolving settings" in caplog.text and SENTINEL not in caplog.text
     assert result.get("database", Database).host == SENTINEL
 

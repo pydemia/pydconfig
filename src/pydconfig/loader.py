@@ -27,7 +27,7 @@ class ConfigLoader:
         *,
         root_dir: str | Path | None = None,
         yaml_file: str | Path | None = None,
-        env_prefix: str = "PYDCONFIG_",
+        env_prefix: str = "",
         dotenv: bool = True,
         allowed_profiles: Sequence[str] | None = None,
         require_profile_yaml: bool = False,
@@ -105,8 +105,13 @@ class ConfigLoader:
         models, resolution = validate_settings(
             root,
             registrations,
-            lambda: resolve_input(
-                self._options, root, profile=profile, environ=environ, overrides=overrides
+            lambda delimiter: resolve_input(
+                self._options,
+                root,
+                env_nested_delimiter=delimiter,
+                profile=profile,
+                environ=environ,
+                overrides=overrides,
             ),
         )
         return ConfigSnapshot(registrations, root, self._options, resolution, models)

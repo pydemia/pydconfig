@@ -1,8 +1,9 @@
 # User guide
 
-This guide covers pydconfig 1.0.1. It starts with a complete application,
-then explains how nested models, YAML, dotenv files, and environment
-variables produce a validated configuration snapshot. The
+This guide covers the current development checkout, including the
+unreleased change to unprefixed environment binding. It starts with a
+complete application, then explains how nested models, YAML, dotenv files,
+and environment variables produce a validated configuration snapshot. The
 [configuration reference](configuration-reference.md) specifies the exact
 API and input restrictions in Korean.
 
@@ -13,6 +14,11 @@ Use standard CPython 3.10–3.14:
 ```bash
 python -m pip install pydconfig==1.0.1
 ```
+
+PyPI 1.0.1 defaults to `env_prefix="PYDCONFIG_"`. To run this guide's
+unprefixed environment examples on that release, pass `env_prefix=""`
+when constructing `ConfigLoader`. The development checkout uses an empty
+prefix by default.
 
 `ConfigModel` represents configuration data such as hosts, ports, timeouts,
 and feature flags. Create database clients, loggers, and other resources
@@ -113,7 +119,7 @@ class DatabaseConfig(ConfigModel):
 ```
 
 The YAML and environment paths are `database.pool.size` and
-`PYDCONFIG_DATABASE__POOL__SIZE`. Supplying only the nested `size` preserves
+`DATABASE__POOL__SIZE`. Supplying only the nested `size` preserves
 the other child defaults:
 
 ```yaml
@@ -190,8 +196,8 @@ database:
     host: replica.internal
 ```
 
-Their environment variables are `PYDCONFIG_DATABASE__PRIMARY__HOST` and
-`PYDCONFIG_DATABASE__REPLICA__HOST`. `PYDCONFIG_PRIMARY_DB__HOST` does not
+Their environment variables are `DATABASE__PRIMARY__HOST` and
+`DATABASE__REPLICA__HOST`. `PRIMARY_DB__HOST` does not
 refer to either path. Overrides and `explain()` use paths; `get()` uses
 names and requires the exact registered model type.
 
@@ -202,7 +208,7 @@ the reserved top-level `profile` key are rejected.
 
 When only `database.primary` is registered, `database` is a structural
 ancestor, not a model section. Whole-model environment JSON can target
-`PYDCONFIG_DATABASE__PRIMARY`; targeting `PYDCONFIG_DATABASE` is a
+`DATABASE__PRIMARY`; targeting `DATABASE` is a
 structural error.
 
 ## YAML files
@@ -270,31 +276,55 @@ Relative model fields of type `Path` are not automatically resolved under
 
 ## Environment variables
 
-Direct binding does not require YAML placeholders. Names are derived from
-registered configuration paths, using the prefix `PYDCONFIG_`, uppercase
-segments, and `__` separators:
+Direct binding does not require YAML placeholders or a `PYDCONFIG_`
+prefix. `ConfigLoader` defaults to `env_prefix=""`. Names are derived from
+registered configuration paths, using uppercase segments and `__`
+separators:
 
 | Configuration path | Environment name |
 | --- | --- |
-| `database.host` | `PYDCONFIG_DATABASE__HOST` |
-| `database.port` | `PYDCONFIG_DATABASE__PORT` |
-| `database.pool.size` | `PYDCONFIG_DATABASE__POOL__SIZE` |
-| `feature.enabled` | `PYDCONFIG_FEATURE__ENABLED` |
-| `feature.hosts` | `PYDCONFIG_FEATURE__HOSTS` |
+| `database.host` | `DATABASE__HOST` |
+| `database.port` | `DATABASE__PORT` |
+| `database.pool.size` | `DATABASE__POOL__SIZE` |
+| `feature.enabled` | `FEATURE__ENABLED` |
+| `feature.hosts` | `FEATURE__HOSTS` |
+
+### Nested delimiter
+
+The aggregate `BaseSettings` configures pydantic-settings with
+`SettingsConfigDict(env_nested_delimiter="__")`. pydconfig's custom source
+reads this setting when binding each environment and dotenv source, while
+preserving source precedence, quote rules, and provenance.
+
+`__` is two consecutive underscores and separates nested levels. The key
+`DATABASE__POOL__SIZE` becomes `database` → `pool` → `size`. A single
+underscore is part of a segment, so `DATABASE__POOL_SIZE` targets a field
+named `pool_size` on `database`; it does not target `database.pool.size`.
+Names such as `APP_SETTINGS__API_KEY` preserve the underscores in both
+`app_settings` and `api_key`. Use the registered path rather than the
+lookup name when a model was registered with `path=...`.
+
+The delimiter is fixed to `__` in pydconfig; applications do not need to
+add pydantic-settings configuration to their `ConfigModel` subclasses.
+`DATABASE_HOST` does not bind `database.host`. Unknown paths under a
+registered root follow the `unknown` policy; variables whose first
+segment is not a registered root are ignored with the empty prefix.
+
+### Supplying environment input
 
 Override the quickstart's nested integer and boolean in Bash:
 
 ```bash
-export PYDCONFIG_DATABASE__POOL__SIZE=40
-export PYDCONFIG_FEATURE__ENABLED=TRUE
+export DATABASE__POOL__SIZE=40
+export FEATURE__ENABLED=TRUE
 python app.py
 ```
 
 Or in PowerShell:
 
 ```powershell
-$env:PYDCONFIG_DATABASE__POOL__SIZE = '40'
-$env:PYDCONFIG_FEATURE__ENABLED = 'TRUE'
+$env:DATABASE__POOL__SIZE = '40'
+$env:FEATURE__ENABLED = 'TRUE'
 python app.py
 ```
 
@@ -307,8 +337,8 @@ Tests can supply an environment mapping without changing process state:
 
 ```python
 snapshot = loader.load(environ={
-    "PYDCONFIG_DATABASE__POOL__SIZE": "40",
-    "PYDCONFIG_FEATURE__ENABLED": "TRUE",
+    "DATABASE__POOL__SIZE": "40",
+    "FEATURE__ENABLED": "TRUE",
 })
 assert snapshot.get("database", DatabaseConfig).pool.size == 40
 assert snapshot.get("feature", FeatureConfig).enabled is True
@@ -321,6 +351,11 @@ Values must be strings. The loader does not mutate the supplied mapping
 or `os.environ`.
 
 `env_prefix="MYAPP_"` changes the host name to `MYAPP_DATABASE__HOST`.
+To retain the names used by pydconfig 1.0.1 and earlier, construct
+`ConfigLoader(root_dir="config", env_prefix="PYDCONFIG_")`; it reads
+`PYDCONFIG_DATABASE__HOST` instead of `DATABASE__HOST`. A prefix is
+optional and does not change the `__` delimiter. If you supply one, only
+variables starting with that prefix are considered for field binding.
 `PYDCONFIG_PROFILE` remains the profile-control name regardless of prefix.
 
 On POSIX, only canonical uppercase names bind automatically. Windows OS
@@ -333,9 +368,9 @@ uppercase names consistently.
 Use JSON for a list, dictionary, or complete model section:
 
 ```dotenv
-PYDCONFIG_DATABASE={"host":"db.internal","port":5432}
-PYDCONFIG_DATABASE__POOL={"size":20,"timeout":1.5}
-PYDCONFIG_FEATURE__HOSTS=["primary","replica"]
+DATABASE={"host":"db.internal","port":5432}
+DATABASE__POOL={"size":20,"timeout":1.5}
+FEATURE__HOSTS=["primary","replica"]
 ```
 
 Within one source, deeper model JSON overrides parent JSON and scalar
@@ -343,9 +378,9 @@ leaves apply last:
 
 ```python
 snapshot = loader.load(environ={
-    "PYDCONFIG_DATABASE": '{"host":"db.internal","pool":{"size":20}}',
-    "PYDCONFIG_DATABASE__POOL": '{"size":24,"timeout":1.5}',
-    "PYDCONFIG_DATABASE__POOL__SIZE": "32",
+    "DATABASE": '{"host":"db.internal","pool":{"size":20}}',
+    "DATABASE__POOL": '{"size":24,"timeout":1.5}',
+    "DATABASE__POOL__SIZE": "32",
 })
 database = snapshot.get("database", DatabaseConfig)
 assert database.host == "db.internal"
@@ -355,7 +390,7 @@ assert database.pool.timeout == 1.5
 
 Across sources, source precedence applies first: OS parent JSON can
 override a dotenv leaf. Lists are replaced as a whole;
-`PYDCONFIG_FEATURE__HOSTS__0` cannot update one item. Dynamic dictionary
+`FEATURE__HOSTS__0` cannot update one item. Dynamic dictionary
 keys also belong inside JSON, not extra `__` segments.
 
 Python literal syntax, duplicate keys, and NaN/Infinity are rejected.
@@ -369,9 +404,9 @@ It does not search parent directories or load `.env.example` automatically.
 For the quickstart, add `config/.env`:
 
 ```dotenv
-PYDCONFIG_DATABASE__POOL__SIZE=24
-PYDCONFIG_FEATURE__ENABLED=TRUE
-PYDCONFIG_FEATURE__HOSTS=["primary","replica"]
+DATABASE__POOL__SIZE=24
+FEATURE__ENABLED=TRUE
+FEATURE__HOSTS=["primary","replica"]
 ```
 
 Without OS overrides, the pool size becomes `24` and the flag becomes
@@ -413,8 +448,8 @@ database:
 Keep `.env` from the previous section and add `.env.local`:
 
 ```dotenv
-PYDCONFIG_DATABASE__POOL__SIZE=32
-PYDCONFIG_FEATURE__ENABLED='"False"'
+DATABASE__POOL__SIZE=32
+FEATURE__ENABLED='"False"'
 ```
 
 With no matching OS variables, the result is:
@@ -429,7 +464,7 @@ With no matching OS variables, the result is:
 | `feature.enabled` | `False` | Profile dotenv, after one quote pair is removed |
 | `feature.hosts` | `["primary", "replica"]` | Base dotenv |
 
-OS `PYDCONFIG_DATABASE__POOL__SIZE=40` overrides `32`. Explicit
+OS `DATABASE__POOL__SIZE=40` overrides `32`. Explicit
 `overrides={"database": {"pool": {"size": 48}}}` overrides even that OS
 value. The [bundled example](../examples/basic/README.md) includes a
 complete file set and runs with an explicitly empty OS environment.
@@ -516,8 +551,8 @@ URLs, string enums, and string literals are preserved by default.
 Shell syntax quotes and characters inside a value differ. In Bash:
 
 ```bash
-export PYDCONFIG_FEATURE__ENABLED="False"
-export PYDCONFIG_FEATURE__ENABLED='"False"'
+export FEATURE__ENABLED="False"
+export FEATURE__ENABLED='"False"'
 ```
 
 The first command supplies `False`; the second supplies `"False"` with
@@ -561,7 +596,7 @@ Overrides have the same mapping structure as the YAML root:
 
 ```python
 snapshot = loader.load(
-    environ={"PYDCONFIG_DATABASE__POOL__SIZE": "40"},
+    environ={"DATABASE__POOL__SIZE": "40"},
     overrides={"database": {"pool": {"size": 48}}},
 )
 assert snapshot.get("database", DatabaseConfig).pool.size == 48
@@ -622,7 +657,7 @@ immutable dataclasses without configuration values.
 | Boolean parsing fails | Accepted token, actual quotes, and the path's policy |
 | Quotes remain in a string | Default preservation and shell syntax versus literal characters |
 | `${VAR}` raises an error | Whether the final YAML value uses it and the variable is defined |
-| Unknown field raises an error | Registration path, field spelling, and unexpected prefixed variables |
+| Unknown field raises an error | Registration path, field spelling, and unexpected variables under registered roots |
 | Source parsing fails | UTF-8, duplicate keys, YAML subset, JSON syntax, and input limits |
 | `get()` fails | Registration name and exact model type |
 

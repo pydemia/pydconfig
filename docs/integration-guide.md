@@ -109,7 +109,7 @@ from fastapi.testclient import TestClient
 with TemporaryDirectory() as directory:
     app = create_app(
         Path(directory),
-        environ={"PYDCONFIG_FEATURE__ENABLED": '"FALSE"'},
+        environ={"FEATURE__ENABLED": '"FALSE"'},
     )
     with TestClient(app) as client:
         assert client.get("/feature").json() == {"enabled": False}

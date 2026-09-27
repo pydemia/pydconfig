@@ -5,6 +5,10 @@
 저장소 root에서 실행한다. CI는 이 예제를 임시 디렉터리에 복사해 실행하고
 출력값을 검사한다.
 
+이 checkout의 dotenv template은 접두사 없는 환경변수명을 쓴다. PyPI
+1.0.1로 실행한다면 `app.py`의 `ConfigLoader` 생성자에 `env_prefix=""`를
+추가한다. 현재 개발 checkout에서는 빈 접두사가 기본값이다.
+
 구성 파일은 공개 예제 값만 사용한다. `.env.example`과 `.env.local.example`은 복사하기 전에는 loader가 읽지 않는다.
 
 ```bash

@@ -15,6 +15,10 @@ interpreters are standard CPython **3.10–3.14**.
 python -m pip install pydconfig==1.0.1
 ```
 
+The unprefixed environment binding described below is an unreleased
+change. When using PyPI 1.0.1, pass `env_prefix=""` to `ConfigLoader` to run
+these environment examples; that release defaults to `"PYDCONFIG_"`.
+
 ## Quickstart
 
 Create these files:
@@ -113,7 +117,7 @@ primary = snapshot.get("primary_db", DatabaseConfig)
 
 For these registrations, YAML contains `database.primary` and
 `database.replica`. The environment variable for the primary host is
-`PYDCONFIG_DATABASE__PRIMARY__HOST`; `get()` still uses `primary_db`.
+`DATABASE__PRIMARY__HOST`; `get()` still uses `primary_db`.
 Overrides and `explain()` also use configuration paths.
 
 Models support scalar settings, nullable fields, nested `ConfigModel`
@@ -154,8 +158,8 @@ You can also select a profile with `load(profile="local")` or the
 [user guide](https://github.com/pydemia/pydconfig/blob/main/docs/user-guide.md#profiles)
 explains selection order, allowed profiles, and required profile files.
 
-YAML string values can reference environment variables without the
-`PYDCONFIG_` prefix:
+YAML string values can reference any environment variable by its exact
+name:
 
 ```yaml
 database:
@@ -171,29 +175,36 @@ injected text as YAML.
 
 ## Environment variables and dotenv
 
-The default prefix is `PYDCONFIG_`. Write configuration paths in uppercase
-and replace each dot with `__`:
+No prefix is required: `env_prefix` defaults to `""`. Write configuration
+paths in uppercase and replace each dot with `__`:
 
 | Configuration path | Environment variable |
 | --- | --- |
-| `database.host` | `PYDCONFIG_DATABASE__HOST` |
-| `database.pool.size` | `PYDCONFIG_DATABASE__POOL__SIZE` |
-| `feature.enabled` | `PYDCONFIG_FEATURE__ENABLED` |
-| `feature.hosts` | `PYDCONFIG_FEATURE__HOSTS` |
+| `database.host` | `DATABASE__HOST` |
+| `database.pool.size` | `DATABASE__POOL__SIZE` |
+| `feature.enabled` | `FEATURE__ENABLED` |
+| `feature.hosts` | `FEATURE__HOSTS` |
+
+The aggregate `BaseSettings` sets
+`SettingsConfigDict(env_nested_delimiter="__")`. Its custom source reads
+that setting to split nested paths in both OS variables and dotenv keys.
+Two underscores separate levels; a single underscore stays within a name.
+For example, `DATABASE__POOL_SIZE` addresses `database.pool_size`, while
+`DATABASE__POOL__SIZE` addresses `database.pool.size`.
 
 For the quickstart above, override nested values in Bash:
 
 ```bash
-export PYDCONFIG_DATABASE__POOL__SIZE=40
-export PYDCONFIG_FEATURE__ENABLED=TRUE
+export DATABASE__POOL__SIZE=40
+export FEATURE__ENABLED=TRUE
 python app.py
 ```
 
 Or in PowerShell:
 
 ```powershell
-$env:PYDCONFIG_DATABASE__POOL__SIZE = '40'
-$env:PYDCONFIG_FEATURE__ENABLED = 'TRUE'
+$env:DATABASE__POOL__SIZE = '40'
+$env:FEATURE__ENABLED = 'TRUE'
 python app.py
 ```
 
@@ -204,18 +215,21 @@ Put the same keys in `config/.env` for local defaults. If `local` is the
 selected profile, `config/.env.local` is loaded after that base file:
 
 ```dotenv
-PYDCONFIG_DATABASE__POOL__SIZE=24
-PYDCONFIG_FEATURE__ENABLED=false
-PYDCONFIG_FEATURE__HOSTS=["primary","replica"]
+DATABASE__POOL__SIZE=24
+FEATURE__ENABLED=false
+FEATURE__HOSTS=["primary","replica"]
 ```
 
 Lists, dictionaries, and whole model sections accept JSON environment
 values. An environment variable such as
-`PYDCONFIG_FEATURE__HOSTS__0` cannot update a list element; supply the whole
+`FEATURE__HOSTS__0` cannot update a list element; supply the whole
 list instead.
 
 `env_prefix="MYAPP_"` changes field binding to names such as
-`MYAPP_DATABASE__HOST`. Profile selection always uses `PYDCONFIG_PROFILE`.
+`MYAPP_DATABASE__HOST`. Use `env_prefix="PYDCONFIG_"` to keep the prefixed
+names used in 1.0.1 and earlier. With the default empty prefix, unrelated
+variables are ignored unless their first segment is a registered root.
+Profile selection always uses the reserved `PYDCONFIG_PROFILE` variable.
 `dotenv=False` disables dotenv files while preserving OS environment
 binding. `load(environ={...})` uses the supplied mapping instead of the
 process environment, and `load(environ={})` excludes the OS environment.
