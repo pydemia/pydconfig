@@ -1,9 +1,8 @@
 # User guide
 
-This guide covers the current development checkout, including the
-unreleased change to unprefixed environment binding. It starts with a
-complete application, then explains how nested models, YAML, dotenv files,
-and environment variables produce a validated configuration snapshot. The
+This guide covers pydconfig 1.0.2. It starts with a complete application,
+then explains how nested models, YAML, dotenv files, and environment
+variables produce a validated configuration snapshot. The
 [configuration reference](configuration-reference.md) specifies the exact
 API and input restrictions in Korean.
 
@@ -12,13 +11,8 @@ API and input restrictions in Korean.
 Use standard CPython 3.10–3.14:
 
 ```bash
-python -m pip install pydconfig==1.0.1
+python -m pip install pydconfig==1.0.2
 ```
-
-PyPI 1.0.1 defaults to `env_prefix="PYDCONFIG_"`. To run this guide's
-unprefixed environment examples on that release, pass `env_prefix=""`
-when constructing `ConfigLoader`. The development checkout uses an empty
-prefix by default.
 
 `ConfigModel` represents configuration data such as hosts, ports, timeouts,
 and feature flags. Create database clients, loggers, and other resources

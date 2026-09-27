@@ -70,7 +70,7 @@ API·우선순위·파싱 정책을 변경하면 설계와 사용자 문서를 �
 
 ## Build와 설치 검증
 
-PEP 517 build를 사용하며 기본 build는 sdist를 생성한 뒤 그 sdist로 wheel을 만든다. version은 package metadata의 `1.0.1`, Git tag는 `v1.0.1`으로 맞춘다. author·license·지원 API는 실제 결정한 값을 기록하며 임의로 넣지 않는다.
+PEP 517 build를 사용하며 기본 build는 sdist를 생성한 뒤 그 sdist로 wheel을 만든다. version은 package metadata의 `1.0.2`, Git tag는 `v1.0.2`로 맞춘다. author·license·지원 API는 실제 결정한 값을 기록하며 임의로 넣지 않는다.
 
 ```bash
 python -m pip install build twine
@@ -78,13 +78,13 @@ python -m build
 python -m twine check dist/*
 ```
 
-build는 wheel과 sdist를 생성한다. wheel filename은 `pydconfig-1.0.1-<python>-<abi>-<platform>.whl` 형태이며 실제 생성된 파일명을 사용한다. [Python Packaging build·metadata 안내](https://packaging.python.org/en/latest/tutorials/packaging-projects/)
+build는 wheel과 sdist를 생성한다. wheel filename은 `pydconfig-1.0.2-<python>-<abi>-<platform>.whl` 형태이며 실제 생성된 파일명을 사용한다. [Python Packaging build·metadata 안내](https://packaging.python.org/en/latest/tutorials/packaging-projects/)
 
 검증은 source checkout의 import가 설치 결과를 가리지 않도록 별도 venv·checkout 밖 cwd에서 수행한다. 생성된 **정확한 wheel 절대경로**를 사용한다.
 
 ```bash
 python -m venv /tmp/pydconfig-wheel-check
-/tmp/pydconfig-wheel-check/bin/python -m pip install /absolute/path/to/dist/pydconfig-1.0.1-py3-none-any.whl
+/tmp/pydconfig-wheel-check/bin/python -m pip install /absolute/path/to/dist/pydconfig-1.0.2-py3-none-any.whl
 cd /tmp
 /tmp/pydconfig-wheel-check/bin/python -c "from importlib.metadata import version; print(version('pydconfig'))"
 ```
@@ -99,24 +99,24 @@ cd /tmp
 | Python 호환성 | 3.10–3.14에서 실제 구현 계약·설치 검사 G11 통과 |
 | 배포물 | wheel·sdist clean install과 공개 API·예제 실행 G9 통과 |
 | 문서 | 실제 API·설치 명령·기능 제한과 README·guide 일치 |
-| Git | 검증 commit의 release branch와 annotated v1.0.1 tag를 원격에서 확인 |
+| Git | 검증 commit의 release branch와 annotated v1.0.2 tag를 원격에서 확인 |
 | GitHub Release | tag 대상 commit 일치, wheel 첨부와 다운로드 파일 checksum 확인 |
 
-사용자가 요청한 대상은 Git push, release branch, `v1.0.1` tag와 GitHub Release의 wheel 첨부다. PyPI 업로드도 요청 범위에 포함됐다. 인증이 없어 업로드할 수 없으면 검증된 배포물로 사용자가 수동 업로드한다. 배포 전 모든 gate를 통과한 commit으로 tag를 생성하고, 기존 tag·release가 있으면 덮어쓰지 않고 먼저 상태를 확인한다.
+사용자가 요청한 대상은 Git push, release branch, `v1.0.2` tag와 GitHub Release의 wheel 첨부다. PyPI 업로드도 요청 범위에 포함됐다. 인증이 없어 업로드할 수 없으면 검증된 배포물로 사용자가 수동 업로드한다. 배포 전 모든 gate를 통과한 commit으로 tag를 생성하고, 기존 tag·release가 있으면 덮어쓰지 않고 먼저 상태를 확인한다.
 
 build 도구와 저장소 정책을 위한 참고는 [PyPA](https://packaging.python.org/en/latest/tutorials/packaging-projects/), [GitHub CLI release create](https://cli.github.com/manual/gh_release_create)다.
-v1.0.1의 로컬 검증은 [release 작업 기록](../.worknotes/release-1.0.1.md)에
+v1.0.2의 로컬 검증은 [release 작업 기록](../.worknotes/release-1.0.2.md)에
 기록한다. v1.0.0의 당시 결과는 [초기 기록](../.worknotes/release-plan.md)에
 보존한다.
 
 ## PyPI 수동 업로드
 
-검증한 wheel과 sdist를 같은 dist에 둔 뒤 업로드한다. PyPI token은 shell history·문서·Git에 넣지 않고 twine의 prompt 또는 보안 credential 저장소로 전달한다. 기존 v1.0.1은 덮어쓸 수 없다.
+검증한 wheel과 sdist를 같은 dist에 둔 뒤 업로드한다. PyPI token은 shell history·문서·Git에 넣지 않고 twine의 prompt 또는 보안 credential 저장소로 전달한다. 이미 게시된 동일 버전의 배포물은 덮어쓸 수 없다.
 
 ```bash
 python -m pip install twine
-python -m twine check dist/pydconfig-1.0.1-py3-none-any.whl dist/pydconfig-1.0.1.tar.gz
-python -m twine upload dist/pydconfig-1.0.1-py3-none-any.whl dist/pydconfig-1.0.1.tar.gz
+python -m twine check dist/pydconfig-1.0.2-py3-none-any.whl dist/pydconfig-1.0.2.tar.gz
+python -m twine upload dist/pydconfig-1.0.2-py3-none-any.whl dist/pydconfig-1.0.2.tar.gz
 ```
 
 GitHub Release에도 SHA256SUMS.txt를 첨부한다. 다운로드한 배포물의 checksum을 확인하고 새 build와 섞지 않는다. 업로드 후 PyPI의 version·metadata·파일 checksum과 별도 venv 설치를 확인한다.

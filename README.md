@@ -12,12 +12,8 @@ interpreters are standard CPython **3.10–3.14**.
 ## Installation
 
 ```bash
-python -m pip install pydconfig==1.0.1
+python -m pip install pydconfig==1.0.2
 ```
-
-The unprefixed environment binding described below is an unreleased
-change. When using PyPI 1.0.1, pass `env_prefix=""` to `ConfigLoader` to run
-these environment examples; that release defaults to `"PYDCONFIG_"`.
 
 ## Quickstart
 

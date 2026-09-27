@@ -15,7 +15,7 @@ from .model import ConfigModel
 from .provenance import FieldExplanation, SourceRef, SourceReport, SourceStatus
 from .snapshot import ConfigSnapshot
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 __all__ = [
     "ConfigLoader",
     "ConfigModel",

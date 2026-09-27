@@ -1,4 +1,4 @@
-"""Load the bundled YAML and dotenv templates with pydconfig 1.0.1."""
+"""Load the bundled YAML and dotenv templates with pydconfig 1.0.2."""
 
 from __future__ import annotations
 
