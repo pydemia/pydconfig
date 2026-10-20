@@ -295,7 +295,8 @@ python -m venv .venv
 On Windows, use `.venv\Scripts\python.exe`. The compatibility workflow
 builds a wheel from an sdist, installs it, and runs tests, the bundled file
 example, upstream API probes, mypy, Ruff, and package checks. Its matrix
-covers Ubuntu CPython 3.10–3.14 and macOS/Windows CPython 3.14.
+covers Ubuntu CPython 3.10–3.13 on CircleCI, and Ubuntu, macOS, and
+Windows CPython 3.14 on GitHub Actions.
 
 PyPy, free-threaded Python, Python 3.15 and later, merging multiple
 profiles, and arbitrary object settings are outside the supported scope.

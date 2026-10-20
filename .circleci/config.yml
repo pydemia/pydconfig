@@ -1,0 +1,36 @@
+version: 2.1
+
+jobs:
+  compatibility:
+    parameters:
+      python-version:
+        type: string
+    docker:
+      - image: cimg/python:<< parameters.python-version >>
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: Build and install package
+          command: |
+            python -m pip install -r requirements/compatibility.txt build
+            python -m build
+            python -m pip install "dist/pydconfig-1.0.2-py3-none-any.whl[dev]"
+      - run:
+          name: Test and check package contracts
+          command: |
+            python -m pip check
+            python -m twine check dist/*
+            python scripts/check_compatibility.py
+            python -m pytest -q -o faulthandler_timeout=30
+            python scripts/check_distribution.py
+            python -m mypy
+            python -m ruff check src tests scripts examples/basic/app.py
+
+workflows:
+  compatibility:
+    jobs:
+      - compatibility:
+          matrix:
+            parameters:
+              python-version: ["3.10", "3.11", "3.12", "3.13"]
