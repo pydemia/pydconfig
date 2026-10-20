@@ -10,6 +10,13 @@ jobs:
     resource_class: small
     steps:
       - checkout
+      # The repository's .python-version targets local development on 3.14.
+      # Override it for each image without changing the packaged source tree.
+      - run:
+          name: Select the Python bundled with the image
+          command: |
+            echo "export PYENV_VERSION=$(pyenv global)" >> "$BASH_ENV"
+            PYENV_VERSION="$(pyenv global)" python --version
       - run:
           name: Build and install package
           command: |
